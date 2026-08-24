@@ -1,0 +1,103 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-initial-schema
+      author: brasil-drama
+      changes:
+        - createTable:
+            tableName: app_user
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: varchar(320)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: display_name
+                  type: varchar(120)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: drama
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: synopsis
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: genre
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cover_url
+                  type: text
+        - createTable:
+            tableName: episode
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_episode_drama
+                    references: drama(id)
+              - column:
+                  name: number
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: coin_price
+                  type: integer
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: free
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: video_url
+                  type: text
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: episode
+            columnNames: drama_id, number
+            constraintName: uk_episode_drama_number
