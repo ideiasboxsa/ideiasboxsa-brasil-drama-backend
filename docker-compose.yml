@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: brasil_drama
+      POSTGRES_USER: brasil_drama
+      POSTGRES_PASSWORD: brasil_drama
+    ports:
+      - "5432:5432"
+    volumes:
+      - brasil_drama_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brasil_drama -d brasil_drama"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/brasil_drama
+      DB_USER: brasil_drama
+      DB_PASSWORD: brasil_drama
+    ports:
+      - "8080:8080"
+
+volumes:
+  brasil_drama_pg:
