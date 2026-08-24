@@ -1,0 +1,38 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: brasil_drama
+          POSTGRES_USER: brasil_drama
+          POSTGRES_PASSWORD: brasil_drama
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U brasil_drama -d brasil_drama"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/brasil_drama
+      DB_USER: brasil_drama
+      DB_PASSWORD: brasil_drama
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test
+        run: mvn -B verify
