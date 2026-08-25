@@ -1,0 +1,40 @@
+package br.com.brasildrama.auth;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "app_user")
+class UserAccount {
+    @Id
+    UUID id;
+
+    @Column(nullable = false, unique = true, length = 320)
+    String email;
+
+    @Column(name = "display_name", length = 120)
+    String displayName;
+
+    @Column(name = "password_hash", length = 100)
+    String passwordHash;
+
+    @Column(nullable = false)
+    boolean autoplay = true;
+
+    @Column(name = "allow_mobile_data", nullable = false)
+    boolean allowMobileData = true;
+
+    @Column(name = "created_at", nullable = false)
+    OffsetDateTime createdAt;
+
+    protected UserAccount() {}
+
+    UserAccount(UUID id, String email, String displayName, String passwordHash) {
+        this.id = id;
+        this.email = email;
+        this.displayName = displayName;
+        this.passwordHash = passwordHash;
+        this.createdAt = OffsetDateTime.now();
+    }
+}
