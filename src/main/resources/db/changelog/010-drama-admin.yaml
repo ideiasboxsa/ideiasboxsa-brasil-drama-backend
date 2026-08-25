@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-drama-admin-fields
+      author: openai
+      changes:
+        - addColumn:
+            tableName: drama
+            columns:
+              - column:
+                  name: slug
+                  type: varchar(180)
+              - column:
+                  name: status
+                  type: varchar(24)
+                  defaultValue: PUBLISHED
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp with time zone
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: drama
+            columnNames: slug
+            constraintName: uk_drama_slug
