@@ -11,6 +11,7 @@ spring:
       ddl-auto: validate
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.yaml
+    contexts: ${LIQUIBASE_CONTEXTS:base}
 server:
   port: ${PORT:8080}
 management:
