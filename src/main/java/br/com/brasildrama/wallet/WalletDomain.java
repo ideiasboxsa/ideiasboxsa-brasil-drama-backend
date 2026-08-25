@@ -104,8 +104,8 @@ interface WalletLedgerRepository extends JpaRepository<WalletLedgerEntry, UUID> 
     @Query("select coalesce(sum(e.amount), 0) from WalletLedgerEntry e where e.userId = :userId")
     long balance(@Param("userId") UUID userId);
 
-    @Query(value = "select pg_advisory_xact_lock(hashtext(cast(:userId as text)))", nativeQuery = true)
-    void lockUser(@Param("userId") UUID userId);
+    @Query(value = "select 1 from (select pg_advisory_xact_lock(hashtext(cast(:userId as text)))) wallet_lock", nativeQuery = true)
+    int lockUser(@Param("userId") UUID userId);
 }
 
 interface EpisodeEntitlementRepository extends JpaRepository<EpisodeEntitlement, EpisodeEntitlementId> {
