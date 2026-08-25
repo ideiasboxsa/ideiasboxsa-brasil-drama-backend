@@ -24,7 +24,11 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/brasil_drama
       DB_USER: brasil_drama
       DB_PASSWORD: brasil_drama
-      LIQUIBASE_CONTEXTS: dev
+      LIQUIBASE_CONTEXTS: base,dev
+      REWARDS_WELCOME_ENABLED: "true"
+      REWARDS_WELCOME_BONUS: "50"
+      REWARDS_ADS_DAILY_LIMIT: "5"
+      REWARDS_ADS_BONUS: "20"
     ports:
       - "8080:8080"
 
