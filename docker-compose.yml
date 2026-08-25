@@ -24,6 +24,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/brasil_drama
       DB_USER: brasil_drama
       DB_PASSWORD: brasil_drama
+      LIQUIBASE_CONTEXTS: dev
     ports:
       - "8080:8080"
 
