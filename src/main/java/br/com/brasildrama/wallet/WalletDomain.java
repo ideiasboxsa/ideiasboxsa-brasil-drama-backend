@@ -2,7 +2,7 @@ package br.com.brasildrama.wallet;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.Immutable;
-import org.springframework.data.jpa.repository.*;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.io.Serializable;
@@ -103,10 +103,10 @@ class EpisodeEntitlement {
 interface WalletLedgerRepository extends JpaRepository<WalletLedgerEntry, UUID> {
     Optional<WalletLedgerEntry> findByUserIdAndOperationKey(UUID userId, String operationKey);
 
-    @Query("select coalesce(sum(e.amount), 0) from WalletLedgerEntry e where e.userId = :userId")
+    @org.springframework.data.jpa.repository.Query("select coalesce(sum(e.amount), 0) from WalletLedgerEntry e where e.userId = :userId")
     long balance(@Param("userId") UUID userId);
 
-    @Query(value = "select 1 from (select pg_advisory_xact_lock(hashtext(cast(:userId as text)))) wallet_lock", nativeQuery = true)
+    @org.springframework.data.jpa.repository.Query(value = "select 1 from (select pg_advisory_xact_lock(hashtext(cast(:userId as text)))) wallet_lock", nativeQuery = true)
     int lockUser(@Param("userId") UUID userId);
 }
 
