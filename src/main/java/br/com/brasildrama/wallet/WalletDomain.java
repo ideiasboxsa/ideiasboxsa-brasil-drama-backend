@@ -1,6 +1,7 @@
 package br.com.brasildrama.wallet;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Immutable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
@@ -9,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 
 @Entity
+@Immutable
 @Table(name = "wallet_ledger")
 class WalletLedgerEntry {
     @Id
