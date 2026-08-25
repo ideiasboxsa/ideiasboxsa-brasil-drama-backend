@@ -175,3 +175,85 @@ databaseChangeLog:
                   defaultValueBoolean: true
                   constraints:
                     nullable: false
+
+  - changeSet:
+      id: 004-library-and-playback-history
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: user_favorite
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_favorite_user
+                    references: app_user(id)
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_favorite_drama
+                    references: drama(id)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: user_favorite
+            columnNames: user_id, drama_id
+            constraintName: pk_user_favorite
+        - createTable:
+            tableName: playback_history
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_playback_history_user
+                    references: app_user(id)
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_playback_history_drama
+                    references: drama(id)
+              - column:
+                  name: episode_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_playback_history_episode
+                    references: episode(id)
+              - column:
+                  name: position_ms
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: duration_ms
+                  type: bigint
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: playback_history
+            columnNames: user_id, drama_id
+            constraintName: pk_playback_history
+        - createIndex:
+            tableName: playback_history
+            indexName: idx_playback_history_user_updated
+            columns:
+              - column: { name: user_id }
+              - column: { name: updated_at, descending: true }
