@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/008-rewarded-ads.yaml
   - include:
       file: db/changelog/009-admin-iam.yaml
+  - include:
+      file: db/changelog/010-drama-admin.yaml
