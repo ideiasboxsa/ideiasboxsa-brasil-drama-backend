@@ -1,5 +1,6 @@
 package br.com.brasildrama.auth;
 
+import br.com.brasildrama.rewards.RewardGrantService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.HttpStatus;
@@ -9,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.*;
 
 record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
@@ -29,11 +29,13 @@ public class AuthApi {
     private final UserAccountRepository users;
     private final PasswordEncoder passwords;
     private final JwtService jwt;
+    private final RewardGrantService rewardGrants;
 
-    public AuthApi(UserAccountRepository users, PasswordEncoder passwords, JwtService jwt) {
+    public AuthApi(UserAccountRepository users, PasswordEncoder passwords, JwtService jwt, RewardGrantService rewardGrants) {
         this.users = users;
         this.passwords = passwords;
         this.jwt = jwt;
+        this.rewardGrants = rewardGrants;
     }
 
     @PostMapping("/v1/auth/register")
@@ -44,6 +46,7 @@ public class AuthApi {
         if (users.existsByEmailIgnoreCase(email)) throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         var user = new UserAccount(UUID.randomUUID(), email, request.displayName().trim(), passwords.encode(request.password()));
         users.save(user);
+        rewardGrants.grantWelcomeBonus(user.id);
         return response(user);
     }
 
