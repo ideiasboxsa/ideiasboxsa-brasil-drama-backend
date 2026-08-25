@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/db.changelog-master.yaml
   - include:
       file: db/changelog/006-rewards.yaml
+  - include:
+      file: db/changelog/007-reward-progress.yaml
