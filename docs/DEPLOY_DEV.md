@@ -1,6 +1,10 @@
 # Brasil Drama Backend — DEV Cloud
 
-O ambiente DEV público deve executar o backend com o profile `dev-cloud` e banco PostgreSQL dedicado.
+O ambiente DEV público executa o backend com o profile `dev-cloud`, banco PostgreSQL dedicado na AWS e endpoint oficial:
+
+```text
+https://api-drama-dev.ideiasbox.com/
+```
 
 ## Runtime
 
@@ -10,6 +14,7 @@ O ambiente DEV público deve executar o backend com o profile `dev-cloud` e banc
 - Porta: variável `PORT` (fallback 8080)
 - Healthcheck: `GET /actuator/health`
 - Spring profile: `SPRING_PROFILES_ACTIVE=dev-cloud`
+- API DEV: `https://api-drama-dev.ideiasbox.com/`
 
 ## Variáveis obrigatórias
 
@@ -42,22 +47,22 @@ O contexto Liquibase `dev` contém apenas catálogo/missões técnicas de desenv
 
 ## AdMob SSV
 
-Depois que a URL HTTPS pública existir, configurar no AdMob o callback:
+Callback DEV oficial:
 
 ```text
-https://<api-dev-host>/v1/rewards/ads/ssv
+https://api-drama-dev.ideiasbox.com/v1/rewards/ads/ssv
 ```
 
-O endpoint é público por necessidade do Google, mas a recompensa só é aceita quando a assinatura SSV é válida e o `custom_data` corresponde a uma sessão emitida pelo backend para um usuário autenticado.
+O endpoint é público por necessidade do Google, mas a recompensa só é aceita quando a assinatura SSV é válida e o `custom_data` corresponde a uma sessão emitida pelo backend para um usuário autenticado. Rewarded Ads creditam **Bônus**, não moedas compradas.
 
 ## Smoke test pós-deploy
 
-1. `GET /actuator/health` deve retornar `UP`.
-2. `GET /v1/home` deve responder sem autenticação.
+1. `GET https://api-drama-dev.ideiasbox.com/actuator/health` deve retornar `UP`.
+2. `GET https://api-drama-dev.ideiasbox.com/v1/home` deve responder sem autenticação.
 3. `POST /v1/auth/register` deve criar conta e retornar JWT.
 4. `GET /v1/rewards/overview` com Bearer token deve refletir o bônus de boas-vindas configurado.
 5. `GET /v1/catalog/dramas/{id}` deve retornar episódios do seed DEV.
-6. O APK DEV deve usar a URL HTTPS pública como `API_BASE_URL`.
+6. O APK DEV deve usar `https://api-drama-dev.ideiasbox.com/` como `API_BASE_URL`.
 
 ## Segurança
 
