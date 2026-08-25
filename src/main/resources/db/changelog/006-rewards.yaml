@@ -1,0 +1,208 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-rewards-ledger-checkin-missions
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: reward_ledger
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_reward_ledger_user
+                    references: app_user(id)
+              - column:
+                  name: ledger_type
+                  type: varchar(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reference_type
+                  type: varchar(40)
+              - column:
+                  name: reference_id
+                  type: varchar(160)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: reward_ledger
+            columnNames: user_id, ledger_type, operation_key
+            constraintName: uk_reward_ledger_user_type_operation
+        - createIndex:
+            tableName: reward_ledger
+            indexName: idx_reward_ledger_user_type_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: ledger_type }
+              - column: { name: created_at, descending: true }
+        - createTable:
+            tableName: daily_check_in
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_daily_check_in_user
+                    references: app_user(id)
+              - column:
+                  name: check_in_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: streak_day
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reward_amount
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: daily_check_in
+            columnNames: user_id, check_in_date
+            constraintName: pk_daily_check_in
+        - addUniqueConstraint:
+            tableName: daily_check_in
+            columnNames: user_id, operation_key
+            constraintName: uk_daily_check_in_user_operation
+        - createTable:
+            tableName: reward_mission
+            columns:
+              - column:
+                  name: id
+                  type: varchar(80)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: title
+                  type: varchar(160)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reward_type
+                  type: varchar(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reward_amount
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target
+                  type: bigint
+              - column:
+                  name: action_url
+                  type: varchar(300)
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: user_mission
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_mission_user
+                    references: app_user(id)
+              - column:
+                  name: mission_id
+                  type: varchar(80)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_mission_mission
+                    references: reward_mission(id)
+              - column:
+                  name: progress
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(24)
+                  defaultValue: IN_PROGRESS
+                  constraints:
+                    nullable: false
+              - column:
+                  name: claimed_operation_key
+                  type: varchar(160)
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: user_mission
+            columnNames: user_id, mission_id
+            constraintName: pk_user_mission
+        - addUniqueConstraint:
+            tableName: user_mission
+            columnNames: user_id, claimed_operation_key
+            constraintName: uk_user_mission_claim_operation
+
+  - changeSet:
+      id: 006-dev-reward-missions
+      author: brasil-drama
+      context: dev
+      changes:
+        - insert:
+            tableName: reward_mission
+            columns:
+              - column: { name: id, value: "watch-3-episodes" }
+              - column: { name: title, value: "Maratona rápida" }
+              - column: { name: description, value: "Assista 3 episódios e receba bônus." }
+              - column: { name: reward_type, value: "BONUS" }
+              - column: { name: reward_amount, valueNumeric: 30 }
+              - column: { name: target, valueNumeric: 3 }
+              - column: { name: action_url, value: "brasildrama://discover" }
+              - column: { name: enabled, valueBoolean: true }
