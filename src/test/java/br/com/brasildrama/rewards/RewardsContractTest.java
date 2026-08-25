@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -76,8 +77,12 @@ class RewardsContractTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.accepted").value(true))
             .andExpect(jsonPath("$.bonusBalance").value(0))
-            .andExpect(jsonPath("$.vipPointsBalance").value(120))
-            .andExpect(jsonPath("$.overview.missions[0].status").value("CLAIMED"));
+            .andExpect(jsonPath("$.vipPointsBalance").value(120));
+
+        assertEquals("CLAIMED", jdbc.queryForObject(
+            "select status from user_mission where user_id=? and mission_id=?",
+            String.class, session.userId(), missionId
+        ));
 
         mvc.perform(post("/v1/rewards/missions/{missionId}/claim", missionId)
                 .header("Authorization", bearer(session.token()))
