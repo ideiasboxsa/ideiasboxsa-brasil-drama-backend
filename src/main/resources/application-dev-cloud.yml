@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  liquibase:
+    contexts: ${LIQUIBASE_CONTEXTS:base,dev}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    ttl: ${JWT_TTL:PT24H}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+rewards:
+  welcome:
+    enabled: ${REWARDS_WELCOME_ENABLED:true}
+    bonus: ${REWARDS_WELCOME_BONUS:50}
+  rewarded-ads:
+    daily-limit: ${REWARDED_AD_DAILY_LIMIT:5}
+    bonus: ${REWARDED_AD_BONUS:20}
