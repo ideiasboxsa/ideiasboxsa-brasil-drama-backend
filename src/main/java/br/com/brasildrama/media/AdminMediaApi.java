@@ -1,6 +1,6 @@
 package br.com.brasildrama.media;
 
-import br.com.brasildrama.catalog.DramaRepository;
+import br.com.brasildrama.catalog.DramaCatalogAccess;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
@@ -12,16 +12,16 @@ import java.util.UUID;
 @RequestMapping("/v1/admin/media")
 class AdminMediaApi {
     private final MediaStorageService storage;
-    private final DramaRepository dramas;
+    private final DramaCatalogAccess catalog;
 
-    AdminMediaApi(MediaStorageService storage, DramaRepository dramas) {
+    AdminMediaApi(MediaStorageService storage, DramaCatalogAccess catalog) {
         this.storage = storage;
-        this.dramas = dramas;
+        this.catalog = catalog;
     }
 
     @PostMapping("/dramas/{dramaId}/images/presign")
     ResponseEntity<?> presignImage(@PathVariable UUID dramaId, @Valid @RequestBody PresignImageRequest request) {
-        if (!dramas.existsById(dramaId)) return ResponseEntity.notFound().build();
+        if (!catalog.exists(dramaId)) return ResponseEntity.notFound().build();
         try {
             var kind = MediaStorageService.ImageKind.valueOf(request.kind().trim().toUpperCase());
             return ResponseEntity.ok(storage.presignDramaImage(dramaId, kind, request.contentType().trim()));
