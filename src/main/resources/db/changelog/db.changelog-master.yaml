@@ -257,3 +257,103 @@ databaseChangeLog:
             columns:
               - column: { name: user_id }
               - column: { name: updated_at, descending: true }
+
+  - changeSet:
+      id: 005-wallet-ledger-entitlements
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: wallet_ledger
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_wallet_ledger_user
+                    references: app_user(id)
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entry_type
+                  type: varchar(40)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reference_type
+                  type: varchar(40)
+              - column:
+                  name: reference_id
+                  type: varchar(160)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: wallet_ledger
+            columnNames: user_id, operation_key
+            constraintName: uk_wallet_ledger_user_operation
+        - createIndex:
+            tableName: wallet_ledger
+            indexName: idx_wallet_ledger_user_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: created_at, descending: true }
+        - createTable:
+            tableName: episode_entitlement
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_episode_entitlement_user
+                    references: app_user(id)
+              - column:
+                  name: episode_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_episode_entitlement_episode
+                    references: episode(id)
+              - column:
+                  name: source
+                  type: varchar(40)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: granted_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: episode_entitlement
+            columnNames: user_id, episode_id
+            constraintName: pk_episode_entitlement
+        - addUniqueConstraint:
+            tableName: episode_entitlement
+            columnNames: user_id, operation_key
+            constraintName: uk_episode_entitlement_user_operation
