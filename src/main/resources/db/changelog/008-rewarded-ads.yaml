@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-rewarded-ads
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: rewarded_ad_session
+            columns:
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_rewarded_ad_session_user
+                    references: app_user(id)
+              - column:
+                  name: expires_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: verified_at
+                  type: timestamptz
+              - column:
+                  name: claimed_at
+                  type: timestamptz
+              - column:
+                  name: transaction_id
+                  type: varchar(200)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: rewarded_ad_session
+            columnNames: transaction_id
+            constraintName: uk_rewarded_ad_session_transaction
+        - createIndex:
+            tableName: rewarded_ad_session
+            indexName: idx_rewarded_ad_session_user_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: created_at, descending: true }
