@@ -32,9 +32,12 @@ management:
       show-details: never
 
 rewards:
+  zone-id: ${REWARDS_ZONE_ID:America/Sao_Paulo}
   welcome:
     enabled: ${REWARDS_WELCOME_ENABLED:true}
     bonus: ${REWARDS_WELCOME_BONUS:50}
-  rewarded-ads:
+  ads:
     daily-limit: ${REWARDED_AD_DAILY_LIMIT:5}
     bonus: ${REWARDED_AD_BONUS:20}
+    session-ttl-minutes: ${REWARDED_AD_SESSION_TTL_MINUTES:10}
+    ad-unit-id: ${ADMOB_REWARDED_AD_UNIT_ID:}
