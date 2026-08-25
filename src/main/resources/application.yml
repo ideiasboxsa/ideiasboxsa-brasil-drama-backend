@@ -23,3 +23,8 @@ management:
     health:
       probes:
         enabled: true
+brasil-drama:
+  media:
+    bucket: ${MEDIA_BUCKET:brasil-drama-dev-media}
+    region: ${AWS_REGION:us-east-1}
+    presign-minutes: ${MEDIA_PRESIGN_MINUTES:15}
