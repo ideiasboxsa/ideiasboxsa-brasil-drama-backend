@@ -26,6 +26,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers("/v1/auth/**", "/v1/catalog/**", "/v1/home").permitAll()
                 .requestMatchers("/v1/rewards/ads/ssv").permitAll()
+                .requestMatchers("/v1/admin/auth/login").permitAll()
+                .requestMatchers("/v1/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
