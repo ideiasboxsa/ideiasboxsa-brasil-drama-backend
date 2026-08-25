@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-reward-mission-progress-source
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: reward_mission
+            columns:
+              - column:
+                  name: trigger_type
+                  type: varchar(40)
+        - createTable:
+            tableName: episode_completion
+            columns:
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_episode_completion_user
+                    references: app_user(id)
+              - column:
+                  name: episode_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_episode_completion_episode
+                    references: episode(id)
+              - column:
+                  name: completed_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: episode_completion
+            columnNames: user_id, episode_id
+            constraintName: pk_episode_completion
+
+  - changeSet:
+      id: 007-dev-watch-mission-trigger
+      author: brasil-drama
+      context: dev
+      changes:
+        - update:
+            tableName: reward_mission
+            columns:
+              - column: { name: trigger_type, value: "EPISODE_COMPLETED" }
+            where: "id = 'watch-3-episodes'"
