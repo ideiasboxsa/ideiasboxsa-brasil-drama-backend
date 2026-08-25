@@ -31,7 +31,7 @@ public class RewardGrantService {
             """
             insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at)
             values (?,?,?,?,?,?,?,now())
-            on conflict (user_id,operation_key) do nothing
+            on conflict (user_id,ledger_type,operation_key) do nothing
             """,
             UUID.randomUUID(), userId, "BONUS", operationKey, welcomeBonus, "WELCOME", userId.toString()
         );
