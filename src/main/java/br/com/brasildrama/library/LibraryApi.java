@@ -1,5 +1,6 @@
 package br.com.brasildrama.library;
 
+import br.com.brasildrama.rewards.RewardsProgressService;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -7,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -33,9 +33,11 @@ record ContinueWatchingResponseDto(List<ContinueWatchingItemDto> items) {}
 @RequestMapping("/v1/me")
 class LibraryController {
     private final JdbcTemplate jdbc;
+    private final RewardsProgressService rewardsProgress;
 
-    LibraryController(JdbcTemplate jdbc) {
+    LibraryController(JdbcTemplate jdbc, RewardsProgressService rewardsProgress) {
         this.jdbc = jdbc;
+        this.rewardsProgress = rewardsProgress;
     }
 
     @GetMapping("/favorites")
@@ -115,6 +117,7 @@ class LibraryController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Episode does not belong to drama");
         }
 
+        var userId = userId(authentication);
         jdbc.update(
             """
             insert into playback_history(user_id, drama_id, episode_id, position_ms, duration_ms, updated_at)
@@ -125,8 +128,12 @@ class LibraryController {
                    duration_ms = excluded.duration_ms,
                    updated_at = current_timestamp
             """,
-            userId(authentication), dramaId, episodeId, request.positionMs(), request.durationMs()
+            userId, dramaId, episodeId, request.positionMs(), request.durationMs()
         );
+
+        if (isCompleted(request.positionMs(), request.durationMs())) {
+            rewardsProgress.recordEpisodeCompletion(userId, episodeId);
+        }
     }
 
     @GetMapping("/continue-watching")
@@ -158,6 +165,10 @@ class LibraryController {
             userId(authentication)
         );
         return new ContinueWatchingResponseDto(items);
+    }
+
+    private boolean isCompleted(long positionMs, Long durationMs) {
+        return durationMs != null && durationMs > 0 && positionMs >= Math.ceil(durationMs * 0.95d);
     }
 
     private UUID userId(Authentication authentication) {
