@@ -25,25 +25,43 @@ public class JwtService {
     }
 
     public IssuedToken issue(UUID userId) {
+        return issue(userId, "USER", null);
+    }
+
+    public IssuedToken issueAdmin(UUID operatorId, String role) {
+        return issue(operatorId, "ADMIN", role);
+    }
+
+    private IssuedToken issue(UUID subjectId, String tokenType, String role) {
         var now = Instant.now();
         var expires = now.plus(ttl);
-        var token = Jwts.builder()
-            .subject(userId.toString())
+        var builder = Jwts.builder()
+            .subject(subjectId.toString())
+            .claim("token_type", tokenType)
             .issuedAt(Date.from(now))
-            .expiration(Date.from(expires))
-            .signWith(key)
-            .compact();
+            .expiration(Date.from(expires));
+        if (role != null) builder.claim("role", role);
+        var token = builder.signWith(key).compact();
         return new IssuedToken(token, expires);
     }
 
     public Optional<UUID> parseSubject(String token) {
+        return parse(token).map(ParsedToken::subjectId);
+    }
+
+    public Optional<ParsedToken> parse(String token) {
         try {
-            var subject = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().getSubject();
-            return Optional.of(UUID.fromString(subject));
+            var payload = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            var subject = UUID.fromString(payload.getSubject());
+            var tokenType = payload.get("token_type", String.class);
+            if (tokenType == null) tokenType = "USER";
+            var role = payload.get("role", String.class);
+            return Optional.of(new ParsedToken(subject, tokenType, role));
         } catch (JwtException | IllegalArgumentException ex) {
             return Optional.empty();
         }
     }
 
     public record IssuedToken(String value, Instant expiresAt) {}
+    public record ParsedToken(UUID subjectId, String tokenType, String role) {}
 }
