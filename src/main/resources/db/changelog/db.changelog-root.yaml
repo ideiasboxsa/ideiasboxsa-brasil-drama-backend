@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/007-reward-progress.yaml
   - include:
       file: db/changelog/008-rewarded-ads.yaml
+  - include:
+      file: db/changelog/009-admin-iam.yaml
