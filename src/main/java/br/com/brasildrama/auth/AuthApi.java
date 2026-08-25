@@ -45,7 +45,7 @@ public class AuthApi {
         var email = normalizeEmail(request.email());
         if (users.existsByEmailIgnoreCase(email)) throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         var user = new UserAccount(UUID.randomUUID(), email, request.displayName().trim(), passwords.encode(request.password()));
-        users.save(user);
+        users.saveAndFlush(user);
         rewardGrants.grantWelcomeBonus(user.id);
         return response(user);
     }
