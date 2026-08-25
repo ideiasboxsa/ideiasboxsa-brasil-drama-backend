@@ -151,3 +151,27 @@ databaseChangeLog:
               - column: { name: coin_price, valueNumeric: 0 }
               - column: { name: free, valueBoolean: true }
               - column: { name: video_url, value: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4" }
+
+  - changeSet:
+      id: 003-user-credentials-preferences
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: app_user
+            columns:
+              - column:
+                  name: password_hash
+                  type: varchar(100)
+              - column:
+                  name: autoplay
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: allow_mobile_data
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
