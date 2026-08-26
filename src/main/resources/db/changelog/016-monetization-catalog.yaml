@@ -42,14 +42,10 @@ databaseChangeLog:
                   type: timestamptz
                   defaultValueComputed: CURRENT_TIMESTAMP
                   constraints: { nullable: false }
-        - addCheckConstraint:
-            tableName: commercial_product
-            constraintName: ck_commercial_product_type
-            constraintBody: "product_type in ('SUBSCRIPTION','COIN_PACK')"
-        - addCheckConstraint:
-            tableName: commercial_product
-            constraintName: ck_commercial_product_order
-            constraintBody: "display_order > 0"
+        - sql:
+            sql: "ALTER TABLE commercial_product ADD CONSTRAINT ck_commercial_product_type CHECK (product_type IN ('SUBSCRIPTION','COIN_PACK'))"
+        - sql:
+            sql: "ALTER TABLE commercial_product ADD CONSTRAINT ck_commercial_product_order CHECK (display_order > 0)"
         - insert:
             tableName: commercial_product
             columns:
