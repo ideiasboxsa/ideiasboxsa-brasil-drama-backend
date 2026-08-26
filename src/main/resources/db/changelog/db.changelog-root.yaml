@@ -23,3 +23,5 @@ databaseChangeLog:
       file: db/changelog/015-home-sections.yaml
   - include:
       file: db/changelog/016-monetization-catalog.yaml
+  - include:
+      file: db/changelog/017-google-play-purchases.yaml
