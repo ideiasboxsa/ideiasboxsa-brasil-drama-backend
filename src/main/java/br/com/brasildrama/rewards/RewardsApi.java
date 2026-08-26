@@ -18,7 +18,8 @@ record RewardsCheckInDto(int streakDays, int currentDay, boolean claimedToday, b
 record RewardMissionDto(String id, String title, String description, String rewardType, long rewardAmount, Long progress, Long target, String status, String actionUrl, String startsAt, String endsAt) {}
 record VipRedemptionDto(String id, String label, long requiredVipPoints, int vipDays, boolean enabled) {}
 record RewardTransactionDto(String id, String ledgerType, long amount, String referenceType, String referenceId, String createdAt) {}
-record RewardsOverviewDto(Long bonusBalance, Long vipPointsBalance, RewardsCheckInDto checkIn, List<RewardMissionDto> missions, List<VipRedemptionDto> vipCatalog, List<RewardTransactionDto> history) {}
+record RewardProtectionDto(boolean serverValidated, boolean idempotentOperations, String timezone) {}
+record RewardsOverviewDto(Long bonusBalance, Long vipPointsBalance, RewardsCheckInDto checkIn, List<RewardMissionDto> missions, List<VipRedemptionDto> vipCatalog, List<RewardTransactionDto> history, RewardProtectionDto protection) {}
 record RewardsOperationRequest(String operationKey) {}
 record RewardsOperationResultDto(boolean accepted, Long bonusBalance, Long vipPointsBalance, String subscriptionExpiresAt, RewardsOverviewDto overview) {}
 
@@ -81,7 +82,8 @@ class RewardsService {
             checkInSnapshot(userId, today),
             missions(userId),
             vipCatalog(),
-            history(userId)
+            history(userId),
+            new RewardProtectionDto(true, true, rewardsZone.getId())
         );
     }
 
