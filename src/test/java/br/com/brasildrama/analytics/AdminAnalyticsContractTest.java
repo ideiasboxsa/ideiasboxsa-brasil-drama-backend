@@ -26,6 +26,10 @@ class AdminAnalyticsContractTest {
         assertThat(result.retention().reached50()).isGreaterThanOrEqualTo(0);
         assertThat(result.retention().reached75()).isGreaterThanOrEqualTo(0);
         assertThat(result.retention().completed()).isGreaterThanOrEqualTo(0);
+        assertThat(result.experience().totalSessions()).isGreaterThanOrEqualTo(0);
+        assertThat(result.experience().sessionsWithSubtitles()).isGreaterThanOrEqualTo(0);
+        assertThat(result.experience().qualities()).isNotNull();
+        assertThat(result.experience().subtitles()).isNotNull();
         assertThat(result.errors()).isNotNull();
         assertThat(result.dramas()).isNotNull();
         assertThat(result.episodes()).isNotNull();
