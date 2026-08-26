@@ -43,6 +43,11 @@ class RewardsController {
         return rewards.claimMission(userId(authentication), missionId, operationKey(request));
     }
 
+    @PostMapping("/vip/{optionId}/redeem")
+    RewardsOperationResultDto redeemVip(Authentication authentication, @PathVariable String optionId, @RequestBody RewardsOperationRequest request) {
+        return rewards.redeemVip(userId(authentication), optionId, operationKey(request));
+    }
+
     private static UUID userId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         try { return UUID.fromString(authentication.getName()); }
@@ -76,7 +81,7 @@ class RewardsService {
             balance(userId, "VIP_POINTS"),
             checkInSnapshot(userId, today),
             missions(userId),
-            List.of()
+            vipCatalog()
         );
     }
 
@@ -149,9 +154,64 @@ class RewardsService {
         return result(true, userId);
     }
 
+    @Transactional
+    RewardsOperationResultDto redeemVip(UUID userId, String optionId, String operationKey) {
+        if (optionId == null || optionId.isBlank() || optionId.length() > 80) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "optionId is required");
+        }
+        lock(userId);
+
+        var existing = jdbc.query(
+            "select expires_at from vip_redemption where user_id=? and operation_key=?",
+            (rs, row) -> rs.getObject(1, OffsetDateTime.class),
+            userId,
+            operationKey
+        ).stream().findFirst().orElse(null);
+        if (existing != null) return result(true, userId, existing);
+
+        var option = jdbc.query(
+            "select required_vip_points,vip_days from vip_redemption_option where id=? and enabled=true",
+            (rs, row) -> new VipOption(rs.getLong(1), rs.getInt(2)),
+            optionId
+        ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found"));
+
+        long available = balance(userId, "VIP_POINTS");
+        if (available < option.requiredPoints()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient VIP points");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime currentExpiry = activeVipExpiry(userId);
+        OffsetDateTime startsAt = currentExpiry != null && currentExpiry.isAfter(now) ? currentExpiry : now;
+        OffsetDateTime expiresAt = startsAt.plusDays(option.vipDays());
+
+        jdbc.update(
+            "insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at) values (?,?,?,?,?,?,?,now())",
+            UUID.randomUUID(), userId, "VIP_POINTS", operationKey, -option.requiredPoints(), "VIP_REDEMPTION", optionId
+        );
+        jdbc.update(
+            """
+            insert into vip_redemption(id,user_id,option_id,operation_key,points_spent,vip_days,starts_at,expires_at,created_at)
+            values (?,?,?,?,?,?,?,?,now())
+            """,
+            UUID.randomUUID(), userId, optionId, operationKey, option.requiredPoints(), option.vipDays(), startsAt, expiresAt
+        );
+        return result(true, userId, expiresAt);
+    }
+
     private RewardsOperationResultDto result(boolean accepted, UUID userId) {
+        return result(accepted, userId, activeVipExpiry(userId));
+    }
+
+    private RewardsOperationResultDto result(boolean accepted, UUID userId, OffsetDateTime expiry) {
         var overview = overview(userId);
-        return new RewardsOperationResultDto(accepted, overview.bonusBalance(), overview.vipPointsBalance(), null, overview);
+        return new RewardsOperationResultDto(
+            accepted,
+            overview.bonusBalance(),
+            overview.vipPointsBalance(),
+            expiry == null ? null : expiry.toString(),
+            overview
+        );
     }
 
     private long balance(UUID userId, String ledgerType) {
@@ -207,10 +267,37 @@ class RewardsService {
         );
     }
 
+    private List<VipRedemptionDto> vipCatalog() {
+        return jdbc.query(
+            """
+            select id,label,required_vip_points,vip_days,enabled
+            from vip_redemption_option
+            where enabled=true
+            order by display_order,id
+            """,
+            (rs, row) -> new VipRedemptionDto(
+                rs.getString("id"),
+                rs.getString("label"),
+                rs.getLong("required_vip_points"),
+                rs.getInt("vip_days"),
+                rs.getBoolean("enabled")
+            )
+        );
+    }
+
+    private OffsetDateTime activeVipExpiry(UUID userId) {
+        return jdbc.query(
+            "select expires_at from vip_redemption where user_id=? and expires_at>now() order by expires_at desc limit 1",
+            (rs, row) -> rs.getObject(1, OffsetDateTime.class),
+            userId
+        ).stream().findFirst().orElse(null);
+    }
+
     private void lock(UUID userId) {
         jdbc.queryForObject("select 1 from (select pg_advisory_xact_lock(hashtext(?))) rewards_lock", Integer.class, userId.toString());
     }
 
     private record PreviousCheckIn(LocalDate date, int streakDay) {}
     private record MissionClaim(String rewardType, long amount, String status) {}
+    private record VipOption(long requiredPoints, int vipDays) {}
 }
