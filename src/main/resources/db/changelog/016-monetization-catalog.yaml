@@ -1,0 +1,132 @@
+databaseChangeLog:
+  - changeSet:
+      id: 016-monetization-catalog
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: commercial_product
+            columns:
+              - column:
+                  name: product_id
+                  type: varchar(120)
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: product_type
+                  type: varchar(30)
+                  constraints: { nullable: false }
+              - column:
+                  name: title
+                  type: varchar(120)
+                  constraints: { nullable: false }
+              - column:
+                  name: description
+                  type: varchar(500)
+                  constraints: { nullable: false }
+              - column:
+                  name: coins
+                  type: integer
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+              - column:
+                  name: active
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints: { nullable: false }
+              - column:
+                  name: display_order
+                  type: integer
+                  constraints: { nullable: false }
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+        - addCheckConstraint:
+            tableName: commercial_product
+            constraintName: ck_commercial_product_type
+            constraintBody: "product_type in ('SUBSCRIPTION','COIN_PACK')"
+        - addCheckConstraint:
+            tableName: commercial_product
+            constraintName: ck_commercial_product_order
+            constraintBody: "display_order > 0"
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_daily }
+              - column: { name: product_type, value: SUBSCRIPTION }
+              - column: { name: title, value: Plano diário }
+              - column: { name: description, value: Acesso Premium Brasil Drama. O preço final é informado pela Google Play. }
+              - column: { name: coins, valueNumeric: 0 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 1 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_weekly }
+              - column: { name: product_type, value: SUBSCRIPTION }
+              - column: { name: title, value: Plano semanal }
+              - column: { name: description, value: Acesso Premium Brasil Drama. O preço final é informado pela Google Play. }
+              - column: { name: coins, valueNumeric: 0 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 2 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_monthly }
+              - column: { name: product_type, value: SUBSCRIPTION }
+              - column: { name: title, value: Plano mensal }
+              - column: { name: description, value: Acesso Premium Brasil Drama. O preço final é informado pela Google Play. }
+              - column: { name: coins, valueNumeric: 0 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 3 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_annual }
+              - column: { name: product_type, value: SUBSCRIPTION }
+              - column: { name: title, value: Plano anual }
+              - column: { name: description, value: Acesso Premium Brasil Drama. O preço final é informado pela Google Play. }
+              - column: { name: coins, valueNumeric: 0 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 4 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_coins_100 }
+              - column: { name: product_type, value: COIN_PACK }
+              - column: { name: title, value: 100 moedas }
+              - column: { name: description, value: Pacote consumível creditado após validação da compra. }
+              - column: { name: coins, valueNumeric: 100 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 1 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_coins_300 }
+              - column: { name: product_type, value: COIN_PACK }
+              - column: { name: title, value: 300 moedas }
+              - column: { name: description, value: Pacote consumível creditado após validação da compra. }
+              - column: { name: coins, valueNumeric: 300 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 2 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_coins_700 }
+              - column: { name: product_type, value: COIN_PACK }
+              - column: { name: title, value: 700 moedas }
+              - column: { name: description, value: Pacote consumível creditado após validação da compra. }
+              - column: { name: coins, valueNumeric: 700 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 3 }
+        - insert:
+            tableName: commercial_product
+            columns:
+              - column: { name: product_id, value: brasil_drama_coins_1500 }
+              - column: { name: product_type, value: COIN_PACK }
+              - column: { name: title, value: 1.500 moedas }
+              - column: { name: description, value: Pacote consumível creditado após validação da compra. }
+              - column: { name: coins, valueNumeric: 1500 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 4 }
