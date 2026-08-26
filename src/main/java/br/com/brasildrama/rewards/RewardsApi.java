@@ -15,7 +15,7 @@ import java.util.*;
 
 record RewardsCheckInDayDto(int day, long bonus, boolean claimed) {}
 record RewardsCheckInDto(int streakDays, int currentDay, boolean claimedToday, boolean eligible, List<RewardsCheckInDayDto> days) {}
-record RewardMissionDto(String id, String title, String description, String rewardType, long rewardAmount, Long progress, Long target, String status, String actionUrl) {}
+record RewardMissionDto(String id, String title, String description, String rewardType, long rewardAmount, Long progress, Long target, String status, String actionUrl, String startsAt, String endsAt) {}
 record VipRedemptionDto(String id, String label, long requiredVipPoints, int vipDays, boolean enabled) {}
 record RewardTransactionDto(String id, String ledgerType, long amount, String referenceType, String referenceId, String createdAt) {}
 record RewardsOverviewDto(Long bonusBalance, Long vipPointsBalance, RewardsCheckInDto checkIn, List<RewardMissionDto> missions, List<VipRedemptionDto> vipCatalog, List<RewardTransactionDto> history) {}
@@ -136,7 +136,7 @@ class RewardsService {
         if (prior != null && prior > 0) return result(true, userId);
 
         var mission = jdbc.query(
-            "select m.reward_type,m.reward_amount,um.status from reward_mission m join user_mission um on um.mission_id=m.id and um.user_id=? where m.id=? and m.enabled=true",
+            "select m.reward_type,m.reward_amount,um.status from reward_mission m join user_mission um on um.mission_id=m.id and um.user_id=? where m.id=? and m.enabled=true and (m.starts_at is null or m.starts_at<=now()) and (m.ends_at is null or m.ends_at>now())",
             (rs, rowNum) -> new MissionClaim(rs.getString(1), rs.getLong(2), rs.getString(3)), userId, missionId
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Mission is not claimable"));
 
@@ -265,15 +265,19 @@ class RewardsService {
         return jdbc.query(
             """
             select m.id,m.title,m.description,m.reward_type,m.reward_amount,coalesce(um.progress,0),m.target,
-                   case when um.status is null then 'IN_PROGRESS' else um.status end,m.action_url
+                   case when um.status is null then 'IN_PROGRESS' else um.status end,m.action_url,m.starts_at,m.ends_at
               from reward_mission m
               left join user_mission um on um.mission_id=m.id and um.user_id=?
              where m.enabled=true
+               and (m.starts_at is null or m.starts_at<=now())
+               and (m.ends_at is null or m.ends_at>now())
              order by m.id
             """,
             (rs, rowNum) -> new RewardMissionDto(
                 rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getLong(5),
-                rs.getLong(6), rs.getObject(7) == null ? null : rs.getLong(7), rs.getString(8), rs.getString(9)
+                rs.getLong(6), rs.getObject(7) == null ? null : rs.getLong(7), rs.getString(8), rs.getString(9),
+                rs.getObject(10, OffsetDateTime.class) == null ? null : rs.getObject(10, OffsetDateTime.class).toString(),
+                rs.getObject(11, OffsetDateTime.class) == null ? null : rs.getObject(11, OffsetDateTime.class).toString()
             ), userId
         );
     }
