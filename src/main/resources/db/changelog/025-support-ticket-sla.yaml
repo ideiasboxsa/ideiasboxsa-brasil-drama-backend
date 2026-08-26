@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 025-support-ticket-sla
+      author: codex
+      context: base
+      changes:
+        - addColumn:
+            tableName: support_ticket
+            columns:
+              - column:
+                  name: priority
+                  type: varchar(16)
+                  defaultValue: NORMAL
+                  constraints: { nullable: false }
+              - column:
+                  name: response_due_at
+                  type: timestamptz
+        - sql:
+            sql: update support_ticket set response_due_at=created_at+interval '24 hours' where response_due_at is null
+        - createIndex:
+            tableName: support_ticket
+            indexName: idx_support_ticket_priority_due
+            columns:
+              - column: { name: priority }
+              - column: { name: response_due_at }

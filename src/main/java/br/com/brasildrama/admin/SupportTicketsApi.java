@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 
 record SupportTicketCreateRequest(String category, String subject, String message) {}
-record SupportTicketUpdateRequest(String status, String adminNote) {}
+record SupportTicketUpdateRequest(String status, String adminNote, String priority) {}
 record SupportTicketMessageRequest(String message) {}
 record SupportTicketRatingRequest(Integer rating, String comment) {}
 record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}
@@ -24,13 +24,14 @@ record SupportTicketDto(
     UUID id, String code, UUID userId, String userEmail, String userDisplayName,
     String category, String subject, String message, String status, String adminNote,
     List<SupportTicketMessageDto> messages, Integer rating, String ratingComment, OffsetDateTime ratedAt,
-    OffsetDateTime createdAt, OffsetDateTime updatedAt
+    String priority, OffsetDateTime responseDueAt, boolean overdue, OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
 class SupportTicketsApi {
     private static final Set<String> CATEGORIES = Set.of("ACCOUNT", "PAYMENT", "PLAYBACK", "REWARDS", "OTHER");
     private static final Set<String> STATUSES = Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED");
+    private static final Set<String> PRIORITIES = Set.of("LOW", "NORMAL", "HIGH", "URGENT");
     private final JdbcTemplate jdbc;
 
     SupportTicketsApi(JdbcTemplate jdbc) {
@@ -47,10 +48,17 @@ class SupportTicketsApi {
         String message = normalized(request == null ? null : request.message(), 2000, "message");
         if (!CATEGORIES.contains(category)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_CATEGORY");
         UUID id = UUID.randomUUID();
+        String priority = "PAYMENT".equals(category) ? "HIGH" : "NORMAL";
+        int slaHours = switch (category) {
+            case "PAYMENT" -> 4;
+            case "PLAYBACK" -> 8;
+            case "ACCOUNT", "REWARDS" -> 12;
+            default -> 24;
+        };
         jdbc.update("""
-            insert into support_ticket(id,user_id,category,subject,message,status,created_at,updated_at)
-            values(?,?,?,?,?,'OPEN',now(),now())
-            """, id, userId, category, subject, message);
+            insert into support_ticket(id,user_id,category,subject,message,status,priority,response_due_at,created_at,updated_at)
+            values(?,?,?,?,?,'OPEN',?,now()+(? * interval '1 hour'),now(),now())
+            """, id, userId, category, subject, message, priority, slaHours);
         return find(id);
     }
 
@@ -100,6 +108,8 @@ class SupportTicketsApi {
             return jdbc.query("""
                 select t.*,u.email,u.display_name from support_ticket t
                 join app_user u on u.id=t.user_id order by
+                case when t.status in ('OPEN','IN_PROGRESS') and t.response_due_at<now() then 0 else 1 end,
+                case t.priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
                 case t.status when 'OPEN' then 0 when 'IN_PROGRESS' then 1 when 'RESOLVED' then 2 else 3 end,
                 t.updated_at desc limit 200
                 """, this::map);
@@ -129,7 +139,9 @@ class SupportTicketsApi {
         if (!STATUSES.contains(status)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
         String note = request == null || request.adminNote() == null ? null : request.adminNote().trim();
         if (note != null && note.length() > 2000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADMIN_NOTE_TOO_LONG");
-        int changed = jdbc.update("update support_ticket set status=?,admin_note=?,updated_at=now() where id=?", status, note, ticketId);
+        String priority = request == null || request.priority() == null ? null : request.priority().trim().toUpperCase(Locale.ROOT);
+        if (priority != null && !PRIORITIES.contains(priority)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PRIORITY");
+        int changed = jdbc.update("update support_ticket set status=?,admin_note=?,priority=coalesce(?,priority),updated_at=now() where id=?", status, note, priority, ticketId);
         if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
         return find(ticketId);
     }
@@ -174,12 +186,16 @@ class SupportTicketsApi {
 
     private SupportTicketDto map(ResultSet rs, int row) throws SQLException {
         UUID id = rs.getObject("id", UUID.class);
+        OffsetDateTime responseDueAt = rs.getObject("response_due_at", OffsetDateTime.class);
+        String status = rs.getString("status");
+        boolean overdue = responseDueAt != null && responseDueAt.isBefore(OffsetDateTime.now()) && ("OPEN".equals(status) || "IN_PROGRESS".equals(status));
         return new SupportTicketDto(
             id, "BD-" + id.toString().substring(0, 8).toUpperCase(Locale.ROOT),
             rs.getObject("user_id", UUID.class), rs.getString("email"), rs.getString("display_name"),
             rs.getString("category"), rs.getString("subject"), rs.getString("message"),
-            rs.getString("status"), rs.getString("admin_note"), messages(id),
+            status, rs.getString("admin_note"), messages(id),
             (Integer) rs.getObject("rating"), rs.getString("rating_comment"), rs.getObject("rated_at", OffsetDateTime.class),
+            rs.getString("priority"), responseDueAt, overdue,
             rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }
