@@ -26,4 +26,40 @@ class AdminRewardsContractTest {
         assertThat(result.missions()).isNotNull();
         assertThat(result.vipOptions()).isNotNull();
     }
+
+    @Test
+    void createsAndEditsMissionCatalog() {
+        var created = rewards.createMission(new AdminRewardMissionWrite(
+            "contract-mission",
+            "Missão contratual",
+            "Assista dois episódios para concluir.",
+            "BONUS",
+            40,
+            2L,
+            "EPISODE_COMPLETED",
+            "brasildrama://discover",
+            false
+        ));
+
+        assertThat(created.id()).isEqualTo("contract-mission");
+        assertThat(created.enabled()).isFalse();
+        assertThat(created.actionUrl()).isEqualTo("brasildrama://discover");
+
+        var updated = rewards.updateMissionDetails("contract-mission", new AdminRewardMissionWrite(
+            "contract-mission",
+            "Missão atualizada",
+            "Assista dois episódios e ganhe pontos VIP.",
+            "VIP_POINTS",
+            20,
+            2L,
+            "EPISODE_COMPLETED",
+            "brasildrama://home",
+            true
+        ));
+
+        assertThat(updated.title()).isEqualTo("Missão atualizada");
+        assertThat(updated.rewardType()).isEqualTo("VIP_POINTS");
+        assertThat(updated.actionUrl()).isEqualTo("brasildrama://home");
+        assertThat(updated.enabled()).isTrue();
+    }
 }
