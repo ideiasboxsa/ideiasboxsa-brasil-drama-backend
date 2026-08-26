@@ -19,12 +19,15 @@ record SupportTicketCreateRequest(String category, String subject, String messag
 record SupportTicketUpdateRequest(String status, String adminNote, String priority) {}
 record SupportTicketMessageRequest(String message) {}
 record SupportTicketRatingRequest(Integer rating, String comment) {}
+record SupportTicketAssignmentRequest(Boolean assigned) {}
 record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}
 record SupportTicketDto(
     UUID id, String code, UUID userId, String userEmail, String userDisplayName,
     String category, String subject, String message, String status, String adminNote,
     List<SupportTicketMessageDto> messages, Integer rating, String ratingComment, OffsetDateTime ratedAt,
-    String priority, OffsetDateTime responseDueAt, boolean overdue, OffsetDateTime createdAt, OffsetDateTime updatedAt
+    String priority, OffsetDateTime responseDueAt, boolean overdue,
+    UUID assignedOperatorId, String assignedOperatorName, OffsetDateTime assignedAt,
+    OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
@@ -67,6 +70,7 @@ class SupportTicketsApi {
         return jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
             join app_user u on u.id=t.user_id
+            left join admin_operator a on a.id=t.assigned_operator_id
             where t.user_id=? order by t.updated_at desc limit 20
             """, this::map, userId(authentication));
     }
@@ -107,7 +111,8 @@ class SupportTicketsApi {
         if (status == null || status.isBlank()) {
             return jdbc.query("""
                 select t.*,u.email,u.display_name from support_ticket t
-                join app_user u on u.id=t.user_id order by
+                join app_user u on u.id=t.user_id
+            left join admin_operator a on a.id=t.assigned_operator_id order by
                 case when t.status in ('OPEN','IN_PROGRESS') and t.response_due_at<now() then 0 else 1 end,
                 case t.priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
                 case t.status when 'OPEN' then 0 when 'IN_PROGRESS' then 1 when 'RESOLVED' then 2 else 3 end,
@@ -118,7 +123,8 @@ class SupportTicketsApi {
         if (!STATUSES.contains(normalizedStatus)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
         return jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
-            join app_user u on u.id=t.user_id where t.status=? order by t.updated_at desc limit 200
+            join app_user u on u.id=t.user_id
+            left join admin_operator a on a.id=t.assigned_operator_id where t.status=? order by t.updated_at desc limit 200
             """, this::map, normalizedStatus);
     }
 
@@ -129,6 +135,24 @@ class SupportTicketsApi {
         requireTicket(ticketId);
         addMessage(ticketId, "ADMIN", request);
         jdbc.update("update support_ticket set status=case when status='OPEN' then 'IN_PROGRESS' else status end where id=?", ticketId);
+        return find(ticketId);
+    }
+
+    @PutMapping("/v1/admin/support-tickets/{ticketId}/assignment")
+    @Transactional
+    SupportTicketDto assignment(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketAssignmentRequest request) {
+        boolean assigned = request != null && Boolean.TRUE.equals(request.assigned());
+        int changed;
+        if (assigned) {
+            UUID operatorId = userId(authentication);
+            changed = jdbc.update("""
+                update support_ticket set assigned_operator_id=?,assigned_at=now(),
+                status=case when status='OPEN' then 'IN_PROGRESS' else status end,updated_at=now() where id=?
+                """, operatorId, ticketId);
+        } else {
+            changed = jdbc.update("update support_ticket set assigned_operator_id=null,assigned_at=null,updated_at=now() where id=?", ticketId);
+        }
+        if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
         return find(ticketId);
     }
 
@@ -168,7 +192,8 @@ class SupportTicketsApi {
     private SupportTicketDto find(UUID id) {
         List<SupportTicketDto> rows = jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
-            join app_user u on u.id=t.user_id where t.id=?
+            join app_user u on u.id=t.user_id
+            left join admin_operator a on a.id=t.assigned_operator_id where t.id=?
             """, this::map, id);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
         return rows.getFirst();
@@ -196,6 +221,7 @@ class SupportTicketsApi {
             status, rs.getString("admin_note"), messages(id),
             (Integer) rs.getObject("rating"), rs.getString("rating_comment"), rs.getObject("rated_at", OffsetDateTime.class),
             rs.getString("priority"), responseDueAt, overdue,
+            rs.getObject("assigned_operator_id", UUID.class), rs.getString("assigned_operator_name"), rs.getObject("assigned_at", OffsetDateTime.class),
             rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }

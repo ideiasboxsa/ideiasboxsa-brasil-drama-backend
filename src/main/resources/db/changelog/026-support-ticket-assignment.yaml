@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 026-support-ticket-assignment
+      author: codex
+      context: base
+      changes:
+        - addColumn:
+            tableName: support_ticket
+            columns:
+              - column:
+                  name: assigned_operator_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_support_ticket_assigned_operator
+                    references: admin_operator(id)
+              - column:
+                  name: assigned_at
+                  type: timestamptz
+        - createIndex:
+            tableName: support_ticket
+            indexName: idx_support_ticket_assigned_operator
+            columns:
+              - column: { name: assigned_operator_id }

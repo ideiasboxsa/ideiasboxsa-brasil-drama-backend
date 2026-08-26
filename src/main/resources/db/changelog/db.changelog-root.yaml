@@ -41,3 +41,5 @@ databaseChangeLog:
       file: db/changelog/024-support-ticket-rating.yaml
   - include:
       file: db/changelog/025-support-ticket-sla.yaml
+  - include:
+      file: db/changelog/026-support-ticket-assignment.yaml
