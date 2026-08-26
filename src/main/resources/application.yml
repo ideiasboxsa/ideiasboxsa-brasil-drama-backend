@@ -28,3 +28,5 @@ brasil-drama:
     bucket: ${MEDIA_BUCKET:brasil-drama-dev-media}
     region: ${AWS_REGION:us-east-1}
     presign-minutes: ${MEDIA_PRESIGN_MINUTES:15}
+    read-presign-minutes: ${MEDIA_READ_PRESIGN_MINUTES:60}
+    max-image-bytes: ${MEDIA_MAX_IMAGE_BYTES:15728640}

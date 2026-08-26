@@ -1,5 +1,6 @@
 package br.com.brasildrama.catalog;
 
+import br.com.brasildrama.media.MediaStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -14,15 +15,17 @@ import java.util.*;
 class AdminDramaApi {
     private final DramaRepository dramas;
     private final EpisodeRepository episodes;
+    private final MediaStorageService media;
 
-    AdminDramaApi(DramaRepository dramas, EpisodeRepository episodes) {
+    AdminDramaApi(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media) {
         this.dramas = dramas;
         this.episodes = episodes;
+        this.media = media;
     }
 
     @GetMapping
     List<AdminDramaSummary> list() {
-        return dramas.findAllByOrderByTitleAsc().stream().map(AdminDramaApi::summary).toList();
+        return dramas.findAllByOrderByTitleAsc().stream().map(this::summary).toList();
     }
 
     @GetMapping("/{id}")
@@ -86,7 +89,7 @@ class AdminDramaApi {
             if (drama.slug == null || drama.slug.isBlank()) reasons.add("SLUG_REQUIRED");
         }
         if (target == DramaStatus.PUBLISHED) {
-            if (drama.coverUrl == null || drama.coverUrl.isBlank()) reasons.add("POSTER_REQUIRED");
+            if ((drama.posterObjectKey == null || drama.posterObjectKey.isBlank()) && (drama.coverUrl == null || drama.coverUrl.isBlank())) reasons.add("POSTER_REQUIRED");
             var dramaEpisodes = episodes.findByDramaIdOrderByNumberAsc(drama.id);
             if (dramaEpisodes.isEmpty()) reasons.add("EPISODE_REQUIRED");
             if (dramaEpisodes.stream().anyMatch(ep -> ep.videoUrl == null || ep.videoUrl.isBlank())) reasons.add("EPISODE_VIDEO_REQUIRED");
@@ -115,12 +118,16 @@ class AdminDramaApi {
         return normalized.isBlank() ? UUID.randomUUID().toString() : normalized;
     }
 
-    private static AdminDramaSummary summary(DramaEntity drama) {
-        return new AdminDramaSummary(drama.id, drama.title, drama.slug, drama.genre, drama.status.name(), drama.coverUrl, drama.updatedAt);
+    private AdminDramaSummary summary(DramaEntity drama) {
+        return new AdminDramaSummary(drama.id, drama.title, drama.slug, drama.genre, drama.status.name(), posterUrl(drama), media.readUrl(drama.backdropObjectKey), drama.updatedAt);
     }
 
-    private static AdminDramaDetail detail(DramaEntity drama) {
-        return new AdminDramaDetail(drama.id, drama.title, drama.slug, drama.synopsis, drama.genre, drama.status.name(), drama.coverUrl, drama.createdAt, drama.updatedAt);
+    private AdminDramaDetail detail(DramaEntity drama) {
+        return new AdminDramaDetail(drama.id, drama.title, drama.slug, drama.synopsis, drama.genre, drama.status.name(), posterUrl(drama), media.readUrl(drama.backdropObjectKey), drama.posterObjectKey, drama.backdropObjectKey, drama.createdAt, drama.updatedAt);
+    }
+
+    private String posterUrl(DramaEntity drama) {
+        return drama.posterObjectKey == null || drama.posterObjectKey.isBlank() ? drama.coverUrl : media.readUrl(drama.posterObjectKey);
     }
 
     record CreateDramaRequest(
@@ -139,6 +146,6 @@ class AdminDramaApi {
 
     record ChangeDramaStatusRequest(@NotBlank String status) {}
 
-    record AdminDramaSummary(UUID id, String title, String slug, String genre, String status, String coverUrl, java.time.Instant updatedAt) {}
-    record AdminDramaDetail(UUID id, String title, String slug, String synopsis, String genre, String status, String coverUrl, java.time.Instant createdAt, java.time.Instant updatedAt) {}
+    record AdminDramaSummary(UUID id, String title, String slug, String genre, String status, String coverUrl, String backdropUrl, java.time.Instant updatedAt) {}
+    record AdminDramaDetail(UUID id, String title, String slug, String synopsis, String genre, String status, String coverUrl, String backdropUrl, String posterObjectKey, String backdropObjectKey, java.time.Instant createdAt, java.time.Instant updatedAt) {}
 }

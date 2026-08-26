@@ -1,14 +1,15 @@
 package br.com.brasildrama.catalog;
 
+import br.com.brasildrama.media.MediaStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
-record DramaSummaryDto(String id, String title, String synopsis, String genre, String coverUrl) {}
+record DramaSummaryDto(String id, String title, String synopsis, String genre, String coverUrl, String backdropUrl) {}
 record EpisodeDto(String id, int number, String title, int coinPrice, boolean free, String videoUrl) {}
-record DramaDetailDto(String id, String title, String synopsis, String genre, String coverUrl, List<EpisodeDto> episodes) {}
+record DramaDetailDto(String id, String title, String synopsis, String genre, String coverUrl, String backdropUrl, List<EpisodeDto> episodes) {}
 record CategoryDto(String slug, String name, int order) {}
 record SearchResponseDto(List<DramaSummaryDto> items, int total, int limit, int offset) {}
 
@@ -17,10 +18,12 @@ record SearchResponseDto(List<DramaSummaryDto> items, int total, int limit, int 
 class CatalogController {
     private final DramaRepository dramas;
     private final EpisodeRepository episodes;
+    private final MediaStorageService media;
 
-    CatalogController(DramaRepository dramas, EpisodeRepository episodes) {
+    CatalogController(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media) {
         this.dramas = dramas;
         this.episodes = episodes;
+        this.media = media;
     }
 
     @GetMapping("/dramas")
@@ -32,7 +35,7 @@ class CatalogController {
     DramaDetailDto drama(@PathVariable UUID dramaId) {
         var drama = dramas.findById(dramaId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         var eps = episodes.findByDramaIdOrderByNumberAsc(dramaId).stream().map(this::episode).toList();
-        return new DramaDetailDto(drama.id.toString(), drama.title, drama.synopsis, drama.genre, drama.coverUrl, eps);
+        return new DramaDetailDto(drama.id.toString(), drama.title, drama.synopsis, drama.genre, posterUrl(drama), media.readUrl(drama.backdropObjectKey), eps);
     }
 
     @GetMapping("/search")
@@ -55,7 +58,8 @@ class CatalogController {
         return dramas.findAllByOrderByTitleAsc().stream().filter(d -> slug(d.genre).equalsIgnoreCase(slug)).map(this::summary).toList();
     }
 
-    private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, d.coverUrl); }
+    private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, posterUrl(d), media.readUrl(d.backdropObjectKey)); }
+    private String posterUrl(DramaEntity d) { return d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey); }
     private EpisodeDto episode(EpisodeEntity e) { return new EpisodeDto(e.id.toString(), e.number, e.title, e.coinPrice, e.free, e.videoUrl); }
     private static String slug(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", ""); }
 }

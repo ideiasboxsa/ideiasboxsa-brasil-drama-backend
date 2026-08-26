@@ -12,6 +12,8 @@ class DramaEntity {
     @Column(nullable = false, columnDefinition = "text") String synopsis;
     @Column(nullable = false) String genre;
     @Column(name = "cover_url", columnDefinition = "text") String coverUrl;
+    @Column(name = "poster_object_key", length = 512) String posterObjectKey;
+    @Column(name = "backdrop_object_key", length = 512) String backdropObjectKey;
     @Column(unique = true, length = 180) String slug;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24) DramaStatus status = DramaStatus.PUBLISHED;

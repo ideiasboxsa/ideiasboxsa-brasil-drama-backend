@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-drama-media-object-keys
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: drama
+            columns:
+              - column:
+                  name: poster_object_key
+                  type: varchar(512)
+              - column:
+                  name: backdrop_object_key
+                  type: varchar(512)

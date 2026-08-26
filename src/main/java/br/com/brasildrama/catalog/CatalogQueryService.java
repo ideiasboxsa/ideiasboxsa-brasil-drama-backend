@@ -1,5 +1,6 @@
 package br.com.brasildrama.catalog;
 
+import br.com.brasildrama.media.MediaStorageService;
 import org.springframework.stereotype.Service;
 import java.util.*;
 
@@ -10,10 +11,12 @@ public class CatalogQueryService {
 
     private final DramaRepository dramas;
     private final EpisodeRepository episodes;
+    private final MediaStorageService media;
 
-    public CatalogQueryService(DramaRepository dramas, EpisodeRepository episodes) {
+    public CatalogQueryService(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media) {
         this.dramas = dramas;
         this.episodes = episodes;
+        this.media = media;
     }
 
     public List<HomeDrama> homeDramas() {
@@ -21,7 +24,7 @@ public class CatalogQueryService {
             d.id.toString(),
             episodes.findByDramaIdOrderByNumberAsc(d.id).stream().findFirst().map(e -> e.id.toString()).orElse(null),
             d.genre,
-            d.coverUrl
+            d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey)
         )).toList();
     }
 
