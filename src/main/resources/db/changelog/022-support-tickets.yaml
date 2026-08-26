@@ -1,0 +1,62 @@
+databaseChangeLog:
+  - changeSet:
+      id: 022-support-tickets
+      author: codex
+      context: base
+      changes:
+        - createTable:
+            tableName: support_ticket
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_support_ticket_user
+                    references: app_user(id)
+              - column:
+                  name: category
+                  type: varchar(40)
+                  constraints: { nullable: false }
+              - column:
+                  name: subject
+                  type: varchar(160)
+                  constraints: { nullable: false }
+              - column:
+                  name: message
+                  type: varchar(2000)
+                  constraints: { nullable: false }
+              - column:
+                  name: status
+                  type: varchar(24)
+                  defaultValue: OPEN
+                  constraints: { nullable: false }
+              - column:
+                  name: admin_note
+                  type: varchar(2000)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+        - createIndex:
+            tableName: support_ticket
+            indexName: idx_support_ticket_status_created
+            columns:
+              - column: { name: status }
+              - column: { name: created_at, descending: true }
+        - createIndex:
+            tableName: support_ticket
+            indexName: idx_support_ticket_user_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: created_at, descending: true }
