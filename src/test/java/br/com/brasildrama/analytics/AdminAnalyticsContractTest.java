@@ -21,6 +21,12 @@ class AdminAnalyticsContractTest {
         assertThat(result.summary().plays()).isGreaterThanOrEqualTo(0);
         assertThat(result.summary().viewers()).isGreaterThanOrEqualTo(0);
         assertThat(result.summary().averageCompletionPercent()).isBetween(0, 100);
+        assertThat(result.retention().started()).isGreaterThanOrEqualTo(0);
+        assertThat(result.retention().reached25()).isGreaterThanOrEqualTo(0);
+        assertThat(result.retention().reached50()).isGreaterThanOrEqualTo(0);
+        assertThat(result.retention().reached75()).isGreaterThanOrEqualTo(0);
+        assertThat(result.retention().completed()).isGreaterThanOrEqualTo(0);
+        assertThat(result.errors()).isNotNull();
         assertThat(result.dramas()).isNotNull();
         assertThat(result.episodes()).isNotNull();
     }
