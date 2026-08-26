@@ -15,6 +15,13 @@ record DashboardMetrics(
     long activeSubscriptions
 ) {}
 
+record DashboardPerformance(
+    long plays30d,
+    long viewers30d,
+    long completedEpisodes30d,
+    int averageCompletionPercent30d
+) {}
+
 record DashboardAttention(
     String code,
     String title,
@@ -28,6 +35,7 @@ record DashboardCatalogStatus(long draft, long ready, long published, long archi
 
 record AdminDashboardView(
     DashboardMetrics metrics,
+    DashboardPerformance performance,
     DashboardCatalogStatus catalog,
     List<DashboardAttention> attention
 ) {}
@@ -57,6 +65,25 @@ class AdminDashboardApi {
                 select count(*) from google_play_purchase
                 where product_type = 'SUBSCRIPTION' and expires_at > now()
                 """)
+        );
+
+        var performance = new DashboardPerformance(
+            count("""
+                select count(distinct session_id)
+                from playback_event
+                where event_type = 'play' and created_at >= now() - interval '30 days'
+                """),
+            count("""
+                select count(distinct coalesce(user_id::text, session_id))
+                from playback_event
+                where created_at >= now() - interval '30 days'
+                """),
+            count("""
+                select count(distinct (session_id, episode_id))
+                from playback_event
+                where event_type = 'completion' and created_at >= now() - interval '30 days'
+                """),
+            averageCompletionPercent()
         );
 
         var catalog = new DashboardCatalogStatus(
@@ -109,7 +136,20 @@ class AdminDashboardApi {
             "/monetization"
         ));
 
-        return new AdminDashboardView(metrics, catalog, attention);
+        return new AdminDashboardView(metrics, performance, catalog, attention);
+    }
+
+    private int averageCompletionPercent() {
+        Double value = jdbc.queryForObject("""
+            select coalesce(avg(least(100.0, greatest(0.0, position_ms * 100.0 / nullif(duration_ms, 0)))), 0)
+            from (
+                select session_id, episode_id, max(position_ms) position_ms, max(duration_ms) duration_ms
+                from playback_event
+                where duration_ms is not null and created_at >= now() - interval '30 days'
+                group by session_id, episode_id
+            ) sessions
+            """, Double.class);
+        return value == null ? 0 : (int) Math.round(value);
     }
 
     private long count(String sql) {
