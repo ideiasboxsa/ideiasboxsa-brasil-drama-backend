@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-configurable-checkin-cycle
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: reward_checkin_cycle
+            columns:
+              - column:
+                  name: day_number
+                  type: integer
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: reward_amount
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 1 }
+              - column: { name: reward_amount, valueNumeric: 30 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 2 }
+              - column: { name: reward_amount, valueNumeric: 30 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 3 }
+              - column: { name: reward_amount, valueNumeric: 50 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 4 }
+              - column: { name: reward_amount, valueNumeric: 50 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 5 }
+              - column: { name: reward_amount, valueNumeric: 80 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 6 }
+              - column: { name: reward_amount, valueNumeric: 100 }
+              - column: { name: enabled, valueBoolean: true }
+        - insert:
+            tableName: reward_checkin_cycle
+            columns:
+              - column: { name: day_number, valueNumeric: 7 }
+              - column: { name: reward_amount, valueNumeric: 150 }
+              - column: { name: enabled, valueBoolean: true }
