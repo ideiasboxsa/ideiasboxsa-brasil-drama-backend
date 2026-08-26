@@ -27,6 +27,8 @@ class AdminRewardsContractTest {
         assertThat(result.vipOptions()).isNotNull();
         assertThat(result.recentTransactions()).isNotNull();
         assertThat(result.checkInCycle()).isNotEmpty();
+        assertThat(result.fraudSignals()).isNotNull();
+        assertThat(result.fraudSignals().unverifiedAdClaims()).isZero();
     }
 
     @Test
