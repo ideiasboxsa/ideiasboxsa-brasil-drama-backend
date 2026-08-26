@@ -58,6 +58,8 @@ class AdminRewardsContractTest {
             2L,
             "EPISODE_COMPLETED",
             "brasildrama://discover",
+            null,
+            null,
             false
         ));
 
@@ -74,12 +76,16 @@ class AdminRewardsContractTest {
             2L,
             "EPISODE_COMPLETED",
             "brasildrama://home",
+            "2026-01-01T00:00:00Z",
+            "2027-01-01T00:00:00Z",
             true
         ));
 
         assertThat(updated.title()).isEqualTo("Missão atualizada");
         assertThat(updated.rewardType()).isEqualTo("VIP_POINTS");
         assertThat(updated.actionUrl()).isEqualTo("brasildrama://home");
+        assertThat(updated.startsAt()).isEqualTo("2026-01-01T00:00Z");
+        assertThat(updated.endsAt()).isEqualTo("2027-01-01T00:00Z");
         assertThat(updated.enabled()).isTrue();
     }
 }
