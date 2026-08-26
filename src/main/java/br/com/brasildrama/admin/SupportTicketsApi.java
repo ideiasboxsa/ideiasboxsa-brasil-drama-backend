@@ -18,11 +18,13 @@ import java.util.UUID;
 record SupportTicketCreateRequest(String category, String subject, String message) {}
 record SupportTicketUpdateRequest(String status, String adminNote) {}
 record SupportTicketMessageRequest(String message) {}
+record SupportTicketRatingRequest(Integer rating, String comment) {}
 record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}
 record SupportTicketDto(
     UUID id, String code, UUID userId, String userEmail, String userDisplayName,
     String category, String subject, String message, String status, String adminNote,
-    List<SupportTicketMessageDto> messages, OffsetDateTime createdAt, OffsetDateTime updatedAt
+    List<SupportTicketMessageDto> messages, Integer rating, String ratingComment, OffsetDateTime ratedAt,
+    OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
@@ -68,6 +70,27 @@ class SupportTicketsApi {
         UUID userId = userId(authentication);
         requireOwnedOpenTicket(ticketId, userId);
         addMessage(ticketId, "USER", request);
+        return find(ticketId);
+    }
+
+    @PostMapping("/v1/me/support-tickets/{ticketId}/rating")
+    @Transactional
+    SupportTicketDto rate(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketRatingRequest request) {
+        UUID userId = userId(authentication);
+        if (request == null || request.rating() == null || request.rating() < 1 || request.rating() > 5) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RATING");
+        }
+        String comment = request.comment() == null ? null : request.comment().trim();
+        if (comment != null && comment.length() > 1000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "RATING_COMMENT_TOO_LONG");
+        int changed = jdbc.update("""
+            update support_ticket set rating=?,rating_comment=?,rated_at=now(),updated_at=now()
+            where id=? and user_id=? and status in ('RESOLVED','CLOSED') and rating is null
+            """, request.rating(), comment == null || comment.isBlank() ? null : comment, ticketId, userId);
+        if (changed == 0) {
+            Integer exists = jdbc.queryForObject("select count(*) from support_ticket where id=? and user_id=?", Integer.class, ticketId, userId);
+            if (exists == null || exists == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "TICKET_NOT_RATEABLE");
+        }
         return find(ticketId);
     }
 
@@ -156,6 +179,7 @@ class SupportTicketsApi {
             rs.getObject("user_id", UUID.class), rs.getString("email"), rs.getString("display_name"),
             rs.getString("category"), rs.getString("subject"), rs.getString("message"),
             rs.getString("status"), rs.getString("admin_note"), messages(id),
+            (Integer) rs.getObject("rating"), rs.getString("rating_comment"), rs.getObject("rated_at", OffsetDateTime.class),
             rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }

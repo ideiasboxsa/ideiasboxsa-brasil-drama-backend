@@ -37,3 +37,5 @@ databaseChangeLog:
       file: db/changelog/022-support-tickets.yaml
   - include:
       file: db/changelog/023-support-ticket-messages.yaml
+  - include:
+      file: db/changelog/024-support-ticket-rating.yaml
