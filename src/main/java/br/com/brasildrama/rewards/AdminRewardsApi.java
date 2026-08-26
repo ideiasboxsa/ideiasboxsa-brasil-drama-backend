@@ -39,13 +39,26 @@ record AdminRewardMission(
     long claimed
 ) {}
 
+record AdminVipOption(
+    String id,
+    String label,
+    long requiredVipPoints,
+    int vipDays,
+    boolean enabled,
+    int displayOrder,
+    long redemptions,
+    long pointsSpent
+) {}
+
 record AdminRewardsView(
     AdminRewardsSummary summary,
     AdminRewardedAdsSummary rewardedAds,
-    List<AdminRewardMission> missions
+    List<AdminRewardMission> missions,
+    List<AdminVipOption> vipOptions
 ) {}
 
 record AdminRewardMissionUpdate(boolean enabled) {}
+record AdminVipOptionUpdate(boolean enabled) {}
 
 @RestController
 @RequestMapping("/v1/admin/rewards")
@@ -76,7 +89,7 @@ class AdminRewardsApi {
                 where expires_at<now() and claimed_at is null
                 """)
         );
-        return new AdminRewardsView(summary, ads, missions());
+        return new AdminRewardsView(summary, ads, missions(), vipOptions());
     }
 
     @PutMapping("/missions/{missionId}")
@@ -96,6 +109,21 @@ class AdminRewardsApi {
             .filter(item -> item.id().equals(missionId))
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found"));
+    }
+
+    @PutMapping("/vip/{optionId}")
+    AdminVipOption updateVipOption(@PathVariable String optionId, @RequestBody AdminVipOptionUpdate request) {
+        if (optionId == null || optionId.isBlank() || optionId.length() > 80) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid VIP option id");
+        }
+        int updated = jdbc.update("update vip_redemption_option set enabled=? where id=?", request.enabled(), optionId);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found");
+        }
+        return vipOptions().stream()
+            .filter(item -> item.id().equals(optionId))
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found"));
     }
 
     private List<AdminRewardMission> missions() {
@@ -122,6 +150,28 @@ class AdminRewardsApi {
                 rs.getLong("participants"),
                 rs.getLong("completed"),
                 rs.getLong("claimed")
+            )
+        );
+    }
+
+    private List<AdminVipOption> vipOptions() {
+        return jdbc.query("""
+            select o.id,o.label,o.required_vip_points,o.vip_days,o.enabled,o.display_order,
+                   count(r.id) redemptions,coalesce(sum(r.points_spent),0) points_spent
+            from vip_redemption_option o
+            left join vip_redemption r on r.option_id=o.id
+            group by o.id,o.label,o.required_vip_points,o.vip_days,o.enabled,o.display_order
+            order by o.display_order,o.id
+            """,
+            (rs, row) -> new AdminVipOption(
+                rs.getString("id"),
+                rs.getString("label"),
+                rs.getLong("required_vip_points"),
+                rs.getInt("vip_days"),
+                rs.getBoolean("enabled"),
+                rs.getInt("display_order"),
+                rs.getLong("redemptions"),
+                rs.getLong("points_spent")
             )
         );
     }
