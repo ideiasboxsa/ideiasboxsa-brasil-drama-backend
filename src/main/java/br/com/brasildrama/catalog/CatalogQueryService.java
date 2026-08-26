@@ -20,7 +20,7 @@ public class CatalogQueryService {
     }
 
     public List<HomeDrama> homeDramas() {
-        return dramas.findAllByOrderByTitleAsc().stream().map(d -> new HomeDrama(
+        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream().map(d -> new HomeDrama(
             d.id.toString(),
             episodes.findByDramaIdOrderByNumberAsc(d.id).stream().findFirst().map(e -> e.id.toString()).orElse(null),
             d.genre,

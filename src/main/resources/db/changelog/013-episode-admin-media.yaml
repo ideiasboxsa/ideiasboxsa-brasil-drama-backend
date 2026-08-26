@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 013-episode-admin-media
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: episode
+            columns:
+              - column:
+                  name: description
+                  type: text
+              - column:
+                  name: duration_seconds
+                  type: integer
+              - column:
+                  name: video_object_key
+                  type: varchar(512)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - dropNotNullConstraint:
+            tableName: episode
+            columnName: video_url
+            columnDataType: text
+        - createIndex:
+            tableName: episode
+            indexName: idx_episode_drama_number
+            columns:
+              - column: { name: drama_id }
+              - column: { name: number }

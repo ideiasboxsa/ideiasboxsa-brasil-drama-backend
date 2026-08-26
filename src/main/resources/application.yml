@@ -30,3 +30,5 @@ brasil-drama:
     presign-minutes: ${MEDIA_PRESIGN_MINUTES:15}
     read-presign-minutes: ${MEDIA_READ_PRESIGN_MINUTES:60}
     max-image-bytes: ${MEDIA_MAX_IMAGE_BYTES:15728640}
+    video-part-bytes: ${MEDIA_VIDEO_PART_BYTES:10485760}
+    max-video-bytes: ${MEDIA_MAX_VIDEO_BYTES:2147483648}

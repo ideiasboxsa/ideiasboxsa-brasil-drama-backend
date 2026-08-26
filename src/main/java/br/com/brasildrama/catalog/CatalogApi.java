@@ -8,7 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
 
 record DramaSummaryDto(String id, String title, String synopsis, String genre, String coverUrl, String backdropUrl) {}
-record EpisodeDto(String id, int number, String title, int coinPrice, boolean free, String videoUrl) {}
+record EpisodeDto(String id, int number, String title, String description, Integer durationSeconds, int coinPrice, boolean free, String videoUrl) {}
 record DramaDetailDto(String id, String title, String synopsis, String genre, String coverUrl, String backdropUrl, List<EpisodeDto> episodes) {}
 record CategoryDto(String slug, String name, int order) {}
 record SearchResponseDto(List<DramaSummaryDto> items, int total, int limit, int offset) {}
@@ -28,7 +28,7 @@ class CatalogController {
 
     @GetMapping("/dramas")
     List<DramaSummaryDto> dramas() {
-        return dramas.findAllByOrderByTitleAsc().stream().map(this::summary).toList();
+        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream().map(this::summary).toList();
     }
 
     @GetMapping("/dramas/{dramaId}")
@@ -60,6 +60,6 @@ class CatalogController {
 
     private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, posterUrl(d), media.readUrl(d.backdropObjectKey)); }
     private String posterUrl(DramaEntity d) { return d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey); }
-    private EpisodeDto episode(EpisodeEntity e) { return new EpisodeDto(e.id.toString(), e.number, e.title, e.coinPrice, e.free, e.videoUrl); }
+    private EpisodeDto episode(EpisodeEntity e) { return new EpisodeDto(e.id.toString(), e.number, e.title, e.description, e.durationSeconds, e.coinPrice, e.free, e.videoObjectKey == null || e.videoObjectKey.isBlank() ? e.videoUrl : media.readUrl(e.videoObjectKey)); }
     private static String slug(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", ""); }
 }

@@ -92,7 +92,7 @@ class AdminDramaApi {
             if ((drama.posterObjectKey == null || drama.posterObjectKey.isBlank()) && (drama.coverUrl == null || drama.coverUrl.isBlank())) reasons.add("POSTER_REQUIRED");
             var dramaEpisodes = episodes.findByDramaIdOrderByNumberAsc(drama.id);
             if (dramaEpisodes.isEmpty()) reasons.add("EPISODE_REQUIRED");
-            if (dramaEpisodes.stream().anyMatch(ep -> ep.videoUrl == null || ep.videoUrl.isBlank())) reasons.add("EPISODE_VIDEO_REQUIRED");
+            if (dramaEpisodes.stream().anyMatch(ep -> (ep.videoObjectKey == null || ep.videoObjectKey.isBlank()) && (ep.videoUrl == null || ep.videoUrl.isBlank()))) reasons.add("EPISODE_VIDEO_REQUIRED");
         }
         return reasons;
     }
