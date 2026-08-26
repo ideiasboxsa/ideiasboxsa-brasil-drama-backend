@@ -86,12 +86,25 @@ record PlayVerification(boolean valid, boolean acknowledged, String orderId, Off
 class GooglePlayVerifier {
     private static final String SCOPE = "https://www.googleapis.com/auth/androidpublisher";
     private final String credentialsBase64;
+    private final String expectedPackageName;
     private final RestClient client = RestClient.builder()
         .baseUrl("https://androidpublisher.googleapis.com")
         .build();
 
-    GooglePlayVerifier(@Value("${google.play.service-account-json-base64:}") String credentialsBase64) {
+    GooglePlayVerifier(
+        @Value("${google.play.service-account-json-base64:}") String credentialsBase64,
+        @Value("${google.play.package-name:br.com.brasildrama.app}") String expectedPackageName
+    ) {
         this.credentialsBase64 = credentialsBase64 == null ? "" : credentialsBase64.trim();
+        this.expectedPackageName = expectedPackageName;
+    }
+
+    boolean isConfigured() {
+        return !credentialsBase64.isBlank();
+    }
+
+    String expectedPackageName() {
+        return expectedPackageName;
     }
 
     PlayVerification verify(String packageName, CommercialProductEntity product, String token) {
@@ -177,25 +190,22 @@ class GooglePurchaseService {
     private final GooglePlayPurchaseRepository receipts;
     private final GooglePlayVerifier verifier;
     private final WalletCreditService wallet;
-    private final String expectedPackageName;
 
     GooglePurchaseService(
         CommercialProductRepository products,
         GooglePlayPurchaseRepository receipts,
         GooglePlayVerifier verifier,
-        WalletCreditService wallet,
-        @Value("${google.play.package-name:br.com.brasildrama.app}") String expectedPackageName
+        WalletCreditService wallet
     ) {
         this.products = products;
         this.receipts = receipts;
         this.verifier = verifier;
         this.wallet = wallet;
-        this.expectedPackageName = expectedPackageName;
     }
 
     @Transactional
     GooglePurchaseVerifyResponse verify(UUID userId, GooglePurchaseVerifyRequest request) {
-        if (!expectedPackageName.equals(request.packageName())) {
+        if (!verifier.expectedPackageName().equals(request.packageName())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pacote Android inválido");
         }
         String productId = request.productIds().getFirst();
