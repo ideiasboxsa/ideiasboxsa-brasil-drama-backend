@@ -24,7 +24,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
-                .requestMatchers("/v1/auth/**", "/v1/catalog/**", "/v1/home").permitAll()
+                .requestMatchers("/v1/auth/**", "/v1/catalog/**", "/v1/home", "/v1/monetization/catalog").permitAll()
                 .requestMatchers("/v1/rewards/ads/ssv").permitAll()
                 .requestMatchers("/v1/admin/auth/**").permitAll()
                 .requestMatchers("/v1/admin/**").hasRole("ADMIN")
