@@ -1,6 +1,7 @@
 package br.com.brasildrama.monetization;
 
 import br.com.brasildrama.wallet.WalletCreditService;
+import br.com.brasildrama.rewards.VipAccessService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.auth.oauth2.GoogleCredentials;
 import jakarta.persistence.*;
@@ -201,17 +202,20 @@ class GooglePurchaseService {
     private final GooglePlayPurchaseRepository receipts;
     private final GooglePlayVerifier verifier;
     private final WalletCreditService wallet;
+    private final VipAccessService vipAccess;
 
     GooglePurchaseService(
         CommercialProductRepository products,
         GooglePlayPurchaseRepository receipts,
         GooglePlayVerifier verifier,
-        WalletCreditService wallet
+        WalletCreditService wallet,
+        VipAccessService vipAccess
     ) {
         this.products = products;
         this.receipts = receipts;
         this.verifier = verifier;
         this.wallet = wallet;
+        this.vipAccess = vipAccess;
     }
 
     @Transactional
@@ -278,10 +282,17 @@ class GooglePurchaseService {
     }
 
     SubscriptionStatusResponse subscription(UUID userId) {
-        return receipts.findFirstByUserIdAndProductTypeAndExpiresAtAfterOrderByExpiresAtDesc(
-                userId, "SUBSCRIPTION", OffsetDateTime.now())
-            .map(receipt -> new SubscriptionStatusResponse(true, receipt.productId, receipt.expiresAt))
-            .orElseGet(() -> new SubscriptionStatusResponse(false, null, null));
+        var google = receipts.findFirstByUserIdAndProductTypeAndExpiresAtAfterOrderByExpiresAtDesc(
+            userId, "SUBSCRIPTION", OffsetDateTime.now()
+        ).orElse(null);
+        var rewardsExpiry = vipAccess.activeUntil(userId).orElse(null);
+        if (google != null && (rewardsExpiry == null || google.expiresAt.isAfter(rewardsExpiry))) {
+            return new SubscriptionStatusResponse(true, google.productId, google.expiresAt);
+        }
+        if (rewardsExpiry != null) {
+            return new SubscriptionStatusResponse(true, "vip_rewards", rewardsExpiry);
+        }
+        return new SubscriptionStatusResponse(false, null, null);
     }
 
     List<PurchaseHistoryView> history(UUID userId) {
