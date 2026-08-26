@@ -119,7 +119,7 @@ class SupportTicketsApi {
         if (value == null || value.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required");
         String normalized = value.trim();
         if (normalized.length() > max) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is too long");
-        return normalized.toUpperCase(Locale.ROOT).equals(normalized) && field.equals("category")
-            ? normalized : (field.equals("status") ? normalized.toUpperCase(Locale.ROOT) : normalized);
+        return field.equals("category") || field.equals("status")
+            ? normalized.toUpperCase(Locale.ROOT) : normalized;
     }
 }
