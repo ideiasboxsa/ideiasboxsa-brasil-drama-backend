@@ -2,6 +2,7 @@ package br.com.brasildrama.rewards;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -60,12 +61,16 @@ record AdminRewardTransaction(
     String createdAt
 ) {}
 
+record AdminCheckInDay(int day, long rewardAmount) {}
+record AdminCheckInCycleUpdate(List<AdminCheckInDay> days) {}
+
 record AdminRewardsView(
     AdminRewardsSummary summary,
     AdminRewardedAdsSummary rewardedAds,
     List<AdminRewardMission> missions,
     List<AdminVipOption> vipOptions,
-    List<AdminRewardTransaction> recentTransactions
+    List<AdminRewardTransaction> recentTransactions,
+    List<AdminCheckInDay> checkInCycle
 ) {}
 
 record AdminRewardMissionUpdate(boolean enabled) {}
@@ -121,7 +126,28 @@ class AdminRewardsApi {
                 where expires_at<now() and claimed_at is null
                 """)
         );
-        return new AdminRewardsView(summary, ads, missions(), vipOptions(), recentTransactions());
+        return new AdminRewardsView(summary, ads, missions(), vipOptions(), recentTransactions(), checkInCycle());
+    }
+
+    @PutMapping("/check-in/cycle")
+    @Transactional
+    List<AdminCheckInDay> updateCheckInCycle(@RequestBody AdminCheckInCycleUpdate request) {
+        if (request == null || request.days() == null || request.days().size() < 2 || request.days().size() > 14) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in cycle must have between 2 and 14 days");
+        }
+        for (int index = 0; index < request.days().size(); index++) {
+            var day = request.days().get(index);
+            if (day == null || day.day() != index + 1 || day.rewardAmount() <= 0 || day.rewardAmount() > 1_000_000) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid check-in cycle");
+            }
+        }
+        jdbc.update("delete from reward_checkin_cycle");
+        request.days().forEach(day -> jdbc.update(
+            "insert into reward_checkin_cycle(day_number,reward_amount,enabled) values (?,?,true)",
+            day.day(),
+            day.rewardAmount()
+        ));
+        return checkInCycle();
     }
 
     @PostMapping("/missions")
@@ -283,6 +309,13 @@ class AdminRewardsApi {
                 rs.getLong("redemptions"),
                 rs.getLong("points_spent")
             )
+        );
+    }
+
+    private List<AdminCheckInDay> checkInCycle() {
+        return jdbc.query(
+            "select day_number,reward_amount from reward_checkin_cycle where enabled=true order by day_number",
+            (rs, row) -> new AdminCheckInDay(rs.getInt(1), rs.getLong(2))
         );
     }
 
