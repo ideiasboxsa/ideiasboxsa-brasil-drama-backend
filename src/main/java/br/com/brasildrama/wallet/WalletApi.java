@@ -1,6 +1,7 @@
 package br.com.brasildrama.wallet;
 
 import br.com.brasildrama.catalog.CatalogQueryService;
+import br.com.brasildrama.rewards.VipAccessService;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -20,11 +21,18 @@ class WalletService {
     private final WalletLedgerRepository ledger;
     private final EpisodeEntitlementRepository entitlements;
     private final CatalogQueryService catalog;
+    private final VipAccessService vipAccess;
 
-    WalletService(WalletLedgerRepository ledger, EpisodeEntitlementRepository entitlements, CatalogQueryService catalog) {
+    WalletService(
+        WalletLedgerRepository ledger,
+        EpisodeEntitlementRepository entitlements,
+        CatalogQueryService catalog,
+        VipAccessService vipAccess
+    ) {
         this.ledger = ledger;
         this.entitlements = entitlements;
         this.catalog = catalog;
+        this.vipAccess = vipAccess;
     }
 
     int balance(UUID userId) {
@@ -46,7 +54,7 @@ class WalletService {
         var episode = catalog.episodeAccess(episodeId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Episódio não encontrado"));
 
-        if (episode.free()) {
+        if (episode.free() || vipAccess.activeUntil(userId).isPresent()) {
             return new UnlockResponse(balance(userId), episode.episodeId(), true);
         }
         if (episode.coinPrice() <= 0) {
