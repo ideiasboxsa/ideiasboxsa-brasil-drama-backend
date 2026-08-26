@@ -6,6 +6,8 @@ COPY src src
 RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
+ARG BUILD_COMMIT=unknown
+ENV BUILD_COMMIT=$BUILD_COMMIT
 WORKDIR /app
 RUN useradd --system --uid 10001 --create-home appuser
 COPY --from=build --chown=appuser:appuser /workspace/target/*.jar app.jar

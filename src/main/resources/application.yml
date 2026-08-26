@@ -15,6 +15,9 @@ spring:
 server:
   port: ${PORT:8080}
 management:
+  info:
+    env:
+      enabled: true
   endpoints:
     web:
       exposure:
@@ -32,3 +35,8 @@ brasil-drama:
     max-image-bytes: ${MEDIA_MAX_IMAGE_BYTES:15728640}
     video-part-bytes: ${MEDIA_VIDEO_PART_BYTES:10485760}
     max-video-bytes: ${MEDIA_MAX_VIDEO_BYTES:2147483648}
+
+info:
+  app:
+    name: brasil-drama-backend
+    commit: ${BUILD_COMMIT:unknown}
