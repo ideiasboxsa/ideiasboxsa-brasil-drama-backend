@@ -57,14 +57,22 @@ record CommercialProduct(
 ) {}
 
 record MonetizationCatalogView(List<CommercialProduct> subscriptions, List<CommercialProduct> coinPacks) {}
+record AdminMonetizationCatalogView(
+    List<CommercialProduct> subscriptions,
+    List<CommercialProduct> coinPacks,
+    boolean googlePlayConfigured,
+    String googlePlayPackageName
+) {}
 record CommercialProductUpdate(boolean active, @Min(1) int displayOrder) {}
 
 @RestController
 class MonetizationCatalogApi {
     private final CommercialProductRepository products;
+    private final GooglePlayVerifier googlePlay;
 
-    MonetizationCatalogApi(CommercialProductRepository products) {
+    MonetizationCatalogApi(CommercialProductRepository products, GooglePlayVerifier googlePlay) {
         this.products = products;
+        this.googlePlay = googlePlay;
     }
 
     @GetMapping("/v1/monetization/catalog")
@@ -73,8 +81,14 @@ class MonetizationCatalogApi {
     }
 
     @GetMapping("/v1/admin/monetization/catalog")
-    MonetizationCatalogView adminCatalog() {
-        return catalog(false);
+    AdminMonetizationCatalogView adminCatalog() {
+        var catalog = catalog(false);
+        return new AdminMonetizationCatalogView(
+            catalog.subscriptions(),
+            catalog.coinPacks(),
+            googlePlay.isConfigured(),
+            googlePlay.expectedPackageName()
+        );
     }
 
     @PutMapping("/v1/admin/monetization/catalog/{productId}")
