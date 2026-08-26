@@ -17,7 +17,8 @@ record RewardsCheckInDayDto(int day, long bonus, boolean claimed) {}
 record RewardsCheckInDto(int streakDays, int currentDay, boolean claimedToday, boolean eligible, List<RewardsCheckInDayDto> days) {}
 record RewardMissionDto(String id, String title, String description, String rewardType, long rewardAmount, Long progress, Long target, String status, String actionUrl) {}
 record VipRedemptionDto(String id, String label, long requiredVipPoints, int vipDays, boolean enabled) {}
-record RewardsOverviewDto(Long bonusBalance, Long vipPointsBalance, RewardsCheckInDto checkIn, List<RewardMissionDto> missions, List<VipRedemptionDto> vipCatalog) {}
+record RewardTransactionDto(String id, String ledgerType, long amount, String referenceType, String referenceId, String createdAt) {}
+record RewardsOverviewDto(Long bonusBalance, Long vipPointsBalance, RewardsCheckInDto checkIn, List<RewardMissionDto> missions, List<VipRedemptionDto> vipCatalog, List<RewardTransactionDto> history) {}
 record RewardsOperationRequest(String operationKey) {}
 record RewardsOperationResultDto(boolean accepted, Long bonusBalance, Long vipPointsBalance, String subscriptionExpiresAt, RewardsOverviewDto overview) {}
 
@@ -81,7 +82,8 @@ class RewardsService {
             balance(userId, "VIP_POINTS"),
             checkInSnapshot(userId, today),
             missions(userId),
-            vipCatalog()
+            vipCatalog(),
+            history(userId)
         );
     }
 
@@ -282,6 +284,26 @@ class RewardsService {
                 rs.getInt("vip_days"),
                 rs.getBoolean("enabled")
             )
+        );
+    }
+
+    private List<RewardTransactionDto> history(UUID userId) {
+        return jdbc.query("""
+            select id,ledger_type,amount,reference_type,reference_id,created_at
+              from reward_ledger
+             where user_id=?
+             order by created_at desc,id desc
+             limit 20
+            """,
+            (rs, row) -> new RewardTransactionDto(
+                rs.getObject("id").toString(),
+                rs.getString("ledger_type"),
+                rs.getLong("amount"),
+                rs.getString("reference_type"),
+                rs.getString("reference_id"),
+                rs.getObject("created_at", OffsetDateTime.class).toString()
+            ),
+            userId
         );
     }
 
