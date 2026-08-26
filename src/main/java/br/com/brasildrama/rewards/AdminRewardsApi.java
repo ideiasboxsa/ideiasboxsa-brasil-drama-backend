@@ -63,6 +63,13 @@ record AdminRewardTransaction(
     String createdAt
 ) {}
 
+record AdminRewardFraudSignals(
+    long highVelocityUsers24h,
+    long repeatedReferences24h,
+    long unverifiedAdClaims,
+    long verifiedAdsAwaitingClaim
+) {}
+
 record AdminCheckInDay(int day, long rewardAmount) {}
 record AdminCheckInCycleUpdate(List<AdminCheckInDay> days) {}
 
@@ -72,7 +79,8 @@ record AdminRewardsView(
     List<AdminRewardMission> missions,
     List<AdminVipOption> vipOptions,
     List<AdminRewardTransaction> recentTransactions,
-    List<AdminCheckInDay> checkInCycle
+    List<AdminCheckInDay> checkInCycle,
+    AdminRewardFraudSignals fraudSignals
 ) {}
 
 record AdminRewardMissionUpdate(boolean enabled) {}
@@ -130,7 +138,25 @@ class AdminRewardsApi {
                 where expires_at<now() and claimed_at is null
                 """)
         );
-        return new AdminRewardsView(summary, ads, missions(), vipOptions(), recentTransactions(), checkInCycle());
+        var fraudSignals = new AdminRewardFraudSignals(
+            count("""
+                select count(*) from (
+                    select user_id from reward_ledger
+                    where amount>0 and created_at>=now()-interval '24 hours'
+                    group by user_id having count(*)>=10
+                ) suspicious
+                """),
+            count("""
+                select count(*) from (
+                    select user_id,reference_type,reference_id from reward_ledger
+                    where reference_id is not null and created_at>=now()-interval '24 hours'
+                    group by user_id,reference_type,reference_id having count(*)>1
+                ) repeated
+                """),
+            count("select count(*) from rewarded_ad_session where claimed_at is not null and verified_at is null"),
+            count("select count(*) from rewarded_ad_session where verified_at is not null and claimed_at is null and expires_at>now()")
+        );
+        return new AdminRewardsView(summary, ads, missions(), vipOptions(), recentTransactions(), checkInCycle(), fraudSignals);
     }
 
     @PutMapping("/check-in/cycle")
