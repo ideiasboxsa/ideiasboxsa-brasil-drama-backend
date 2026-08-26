@@ -1,9 +1,50 @@
 package br.com.brasildrama.monetization;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.persistence.*;
+import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.time.OffsetDateTime;
+import java.util.*;
+
+@Entity
+@Table(name = "commercial_product")
+class CommercialProductEntity {
+    @Id
+    @Column(name = "product_id", length = 120)
+    String productId;
+
+    @Column(name = "product_type", nullable = false, length = 30)
+    String type;
+
+    @Column(nullable = false, length = 120)
+    String title;
+
+    @Column(nullable = false, length = 500)
+    String description;
+
+    @Column(nullable = false)
+    int coins;
+
+    @Column(nullable = false)
+    boolean active;
+
+    @Column(name = "display_order", nullable = false)
+    int displayOrder;
+
+    @Column(name = "updated_at", nullable = false)
+    OffsetDateTime updatedAt;
+
+    protected CommercialProductEntity() {}
+}
+
+interface CommercialProductRepository extends JpaRepository<CommercialProductEntity, String> {
+    List<CommercialProductEntity> findAllByOrderByTypeAscDisplayOrderAsc();
+}
 
 record CommercialProduct(
     String productId,
@@ -16,41 +57,61 @@ record CommercialProduct(
 ) {}
 
 record MonetizationCatalogView(List<CommercialProduct> subscriptions, List<CommercialProduct> coinPacks) {}
+record CommercialProductUpdate(boolean active, @Min(1) int displayOrder) {}
 
 @RestController
 class MonetizationCatalogApi {
-    private static final MonetizationCatalogView CATALOG = new MonetizationCatalogView(
-        List.of(
-            subscription("brasil_drama_daily", "Plano diário", 1),
-            subscription("brasil_drama_weekly", "Plano semanal", 2),
-            subscription("brasil_drama_monthly", "Plano mensal", 3),
-            subscription("brasil_drama_annual", "Plano anual", 4)
-        ),
-        List.of(
-            coins("brasil_drama_coins_100", "100 moedas", 100, 1),
-            coins("brasil_drama_coins_300", "300 moedas", 300, 2),
-            coins("brasil_drama_coins_700", "700 moedas", 700, 3),
-            coins("brasil_drama_coins_1500", "1.500 moedas", 1500, 4)
-        )
-    );
+    private final CommercialProductRepository products;
+
+    MonetizationCatalogApi(CommercialProductRepository products) {
+        this.products = products;
+    }
 
     @GetMapping("/v1/monetization/catalog")
     MonetizationCatalogView publicCatalog() {
-        return CATALOG;
+        return catalog(true);
     }
 
     @GetMapping("/v1/admin/monetization/catalog")
     MonetizationCatalogView adminCatalog() {
-        return CATALOG;
+        return catalog(false);
     }
 
-    private static CommercialProduct subscription(String id, String title, int order) {
-        return new CommercialProduct(id, "SUBSCRIPTION", title,
-            "Acesso Premium Brasil Drama. O preço final é informado pela Google Play.", 0, true, order);
+    @PutMapping("/v1/admin/monetization/catalog/{productId}")
+    @Transactional
+    ResponseEntity<?> update(
+        @PathVariable String productId,
+        @Valid @RequestBody CommercialProductUpdate request
+    ) {
+        var product = products.findById(productId).orElse(null);
+        if (product == null) return ResponseEntity.notFound().build();
+        product.active = request.active();
+        product.displayOrder = request.displayOrder();
+        product.updatedAt = OffsetDateTime.now();
+        products.save(product);
+        return ResponseEntity.ok(view(product));
     }
 
-    private static CommercialProduct coins(String id, String title, int amount, int order) {
-        return new CommercialProduct(id, "COIN_PACK", title,
-            "Pacote consumível creditado após validação da compra.", amount, true, order);
+    private MonetizationCatalogView catalog(boolean activeOnly) {
+        var all = products.findAllByOrderByTypeAscDisplayOrderAsc().stream()
+            .filter(product -> !activeOnly || product.active)
+            .map(this::view)
+            .toList();
+        return new MonetizationCatalogView(
+            all.stream().filter(product -> "SUBSCRIPTION".equals(product.type())).toList(),
+            all.stream().filter(product -> "COIN_PACK".equals(product.type())).toList()
+        );
+    }
+
+    private CommercialProduct view(CommercialProductEntity product) {
+        return new CommercialProduct(
+            product.productId,
+            product.type,
+            product.title,
+            product.description,
+            product.coins,
+            product.active,
+            product.displayOrder
+        );
     }
 }
