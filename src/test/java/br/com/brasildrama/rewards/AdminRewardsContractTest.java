@@ -24,5 +24,6 @@ class AdminRewardsContractTest {
         assertThat(result.rewardedAds().created()).isGreaterThanOrEqualTo(0);
         assertThat(result.rewardedAds().claimed()).isGreaterThanOrEqualTo(0);
         assertThat(result.missions()).isNotNull();
+        assertThat(result.vipOptions()).isNotNull();
     }
 }
