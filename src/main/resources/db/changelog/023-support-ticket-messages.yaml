@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 023-support-ticket-messages
+      author: codex
+      context: base
+      changes:
+        - createTable:
+            tableName: support_ticket_message
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: ticket_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_support_ticket_message_ticket
+                    references: support_ticket(id)
+                    deleteCascade: true
+              - column:
+                  name: sender
+                  type: varchar(16)
+                  constraints: { nullable: false }
+              - column:
+                  name: message
+                  type: varchar(2000)
+                  constraints: { nullable: false }
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+        - createIndex:
+            tableName: support_ticket_message
+            indexName: idx_support_ticket_message_ticket_created
+            columns:
+              - column: { name: ticket_id }
+              - column: { name: created_at }

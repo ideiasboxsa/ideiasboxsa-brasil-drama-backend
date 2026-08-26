@@ -17,10 +17,12 @@ import java.util.UUID;
 
 record SupportTicketCreateRequest(String category, String subject, String message) {}
 record SupportTicketUpdateRequest(String status, String adminNote) {}
+record SupportTicketMessageRequest(String message) {}
+record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}
 record SupportTicketDto(
     UUID id, String code, UUID userId, String userEmail, String userDisplayName,
     String category, String subject, String message, String status, String adminNote,
-    OffsetDateTime createdAt, OffsetDateTime updatedAt
+    List<SupportTicketMessageDto> messages, OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
@@ -55,8 +57,18 @@ class SupportTicketsApi {
         return jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
             join app_user u on u.id=t.user_id
-            where t.user_id=? order by t.created_at desc limit 20
+            where t.user_id=? order by t.updated_at desc limit 20
             """, this::map, userId(authentication));
+    }
+
+    @PostMapping("/v1/me/support-tickets/{ticketId}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
+    SupportTicketDto reply(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketMessageRequest request) {
+        UUID userId = userId(authentication);
+        requireOwnedOpenTicket(ticketId, userId);
+        addMessage(ticketId, "USER", request);
+        return find(ticketId);
     }
 
     @GetMapping("/v1/admin/support-tickets")
@@ -66,15 +78,25 @@ class SupportTicketsApi {
                 select t.*,u.email,u.display_name from support_ticket t
                 join app_user u on u.id=t.user_id order by
                 case t.status when 'OPEN' then 0 when 'IN_PROGRESS' then 1 when 'RESOLVED' then 2 else 3 end,
-                t.created_at desc limit 200
+                t.updated_at desc limit 200
                 """, this::map);
         }
         String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
         if (!STATUSES.contains(normalizedStatus)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
         return jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
-            join app_user u on u.id=t.user_id where t.status=? order by t.created_at desc limit 200
+            join app_user u on u.id=t.user_id where t.status=? order by t.updated_at desc limit 200
             """, this::map, normalizedStatus);
+    }
+
+    @PostMapping("/v1/admin/support-tickets/{ticketId}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
+    SupportTicketDto adminReply(@PathVariable UUID ticketId, @RequestBody SupportTicketMessageRequest request) {
+        requireTicket(ticketId);
+        addMessage(ticketId, "ADMIN", request);
+        jdbc.update("update support_ticket set status=case when status='OPEN' then 'IN_PROGRESS' else status end where id=?", ticketId);
+        return find(ticketId);
     }
 
     @PutMapping("/v1/admin/support-tickets/{ticketId}")
@@ -89,6 +111,25 @@ class SupportTicketsApi {
         return find(ticketId);
     }
 
+    private void addMessage(UUID ticketId, String sender, SupportTicketMessageRequest request) {
+        String message = normalized(request == null ? null : request.message(), 2000, "message");
+        jdbc.update("insert into support_ticket_message(id,ticket_id,sender,message,created_at) values(?,?,?,?,now())",
+            UUID.randomUUID(), ticketId, sender, message);
+        jdbc.update("update support_ticket set updated_at=now() where id=?", ticketId);
+    }
+
+    private void requireOwnedOpenTicket(UUID ticketId, UUID userId) {
+        List<String> statuses = jdbc.query("select status from support_ticket where id=? and user_id=?",
+            (rs, row) -> rs.getString(1), ticketId, userId);
+        if (statuses.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+        if ("CLOSED".equals(statuses.getFirst())) throw new ResponseStatusException(HttpStatus.CONFLICT, "TICKET_CLOSED");
+    }
+
+    private void requireTicket(UUID ticketId) {
+        Integer count = jdbc.queryForObject("select count(*) from support_ticket where id=?", Integer.class, ticketId);
+        if (count == null || count == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+    }
+
     private SupportTicketDto find(UUID id) {
         List<SupportTicketDto> rows = jdbc.query("""
             select t.*,u.email,u.display_name from support_ticket t
@@ -98,13 +139,23 @@ class SupportTicketsApi {
         return rows.getFirst();
     }
 
+    private List<SupportTicketMessageDto> messages(UUID ticketId) {
+        return jdbc.query("""
+            select id,sender,message,created_at from support_ticket_message
+            where ticket_id=? order by created_at,id
+            """, (rs, row) -> new SupportTicketMessageDto(
+                rs.getObject("id", UUID.class), rs.getString("sender"),
+                rs.getString("message"), rs.getObject("created_at", OffsetDateTime.class)
+            ), ticketId);
+    }
+
     private SupportTicketDto map(ResultSet rs, int row) throws SQLException {
         UUID id = rs.getObject("id", UUID.class);
         return new SupportTicketDto(
             id, "BD-" + id.toString().substring(0, 8).toUpperCase(Locale.ROOT),
             rs.getObject("user_id", UUID.class), rs.getString("email"), rs.getString("display_name"),
             rs.getString("category"), rs.getString("subject"), rs.getString("message"),
-            rs.getString("status"), rs.getString("admin_note"),
+            rs.getString("status"), rs.getString("admin_note"), messages(id),
             rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }

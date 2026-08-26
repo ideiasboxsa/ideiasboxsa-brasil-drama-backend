@@ -35,3 +35,5 @@ databaseChangeLog:
       file: db/changelog/021-reward-mission-schedule.yaml
   - include:
       file: db/changelog/022-support-tickets.yaml
+  - include:
+      file: db/changelog/023-support-ticket-messages.yaml
