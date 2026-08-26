@@ -51,11 +51,21 @@ record AdminVipOption(
     long pointsSpent
 ) {}
 
+record AdminRewardTransaction(
+    String id,
+    String ledgerType,
+    long amount,
+    String referenceType,
+    String referenceId,
+    String createdAt
+) {}
+
 record AdminRewardsView(
     AdminRewardsSummary summary,
     AdminRewardedAdsSummary rewardedAds,
     List<AdminRewardMission> missions,
-    List<AdminVipOption> vipOptions
+    List<AdminVipOption> vipOptions,
+    List<AdminRewardTransaction> recentTransactions
 ) {}
 
 record AdminRewardMissionUpdate(boolean enabled) {}
@@ -111,7 +121,7 @@ class AdminRewardsApi {
                 where expires_at<now() and claimed_at is null
                 """)
         );
-        return new AdminRewardsView(summary, ads, missions(), vipOptions());
+        return new AdminRewardsView(summary, ads, missions(), vipOptions(), recentTransactions());
     }
 
     @PostMapping("/missions")
@@ -272,6 +282,24 @@ class AdminRewardsApi {
                 rs.getInt("display_order"),
                 rs.getLong("redemptions"),
                 rs.getLong("points_spent")
+            )
+        );
+    }
+
+    private List<AdminRewardTransaction> recentTransactions() {
+        return jdbc.query("""
+            select id,ledger_type,amount,reference_type,reference_id,created_at
+              from reward_ledger
+             order by created_at desc,id desc
+             limit 30
+            """,
+            (rs, row) -> new AdminRewardTransaction(
+                rs.getObject("id").toString(),
+                rs.getString("ledger_type"),
+                rs.getLong("amount"),
+                rs.getString("reference_type"),
+                rs.getString("reference_id"),
+                rs.getObject("created_at", java.time.OffsetDateTime.class).toString()
             )
         );
     }
