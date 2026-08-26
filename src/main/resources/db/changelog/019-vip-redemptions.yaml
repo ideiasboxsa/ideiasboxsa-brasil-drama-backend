@@ -1,0 +1,124 @@
+databaseChangeLog:
+  - changeSet:
+      id: 019-vip-redemptions
+      author: codex
+      context: base
+      changes:
+        - createTable:
+            tableName: vip_redemption_option
+            columns:
+              - column:
+                  name: id
+                  type: varchar(80)
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: label
+                  type: varchar(160)
+                  constraints: { nullable: false }
+              - column:
+                  name: required_vip_points
+                  type: bigint
+                  constraints: { nullable: false }
+              - column:
+                  name: vip_days
+                  type: integer
+                  constraints: { nullable: false }
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints: { nullable: false }
+              - column:
+                  name: display_order
+                  type: integer
+                  defaultValueNumeric: 0
+                  constraints: { nullable: false }
+        - createTable:
+            tableName: vip_redemption
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_vip_redemption_user
+                    references: app_user(id)
+              - column:
+                  name: option_id
+                  type: varchar(80)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_vip_redemption_option
+                    references: vip_redemption_option(id)
+              - column:
+                  name: operation_key
+                  type: varchar(160)
+                  constraints: { nullable: false }
+              - column:
+                  name: points_spent
+                  type: bigint
+                  constraints: { nullable: false }
+              - column:
+                  name: vip_days
+                  type: integer
+                  constraints: { nullable: false }
+              - column:
+                  name: starts_at
+                  type: timestamptz
+                  constraints: { nullable: false }
+              - column:
+                  name: expires_at
+                  type: timestamptz
+                  constraints: { nullable: false }
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+        - addUniqueConstraint:
+            tableName: vip_redemption
+            columnNames: user_id,operation_key
+            constraintName: uk_vip_redemption_user_operation
+        - createIndex:
+            tableName: vip_redemption
+            indexName: idx_vip_redemption_user_expiry
+            columns:
+              - column: { name: user_id }
+              - column: { name: expires_at, descending: true }
+
+  - changeSet:
+      id: 019-dev-vip-options
+      author: codex
+      context: dev
+      changes:
+        - insert:
+            tableName: vip_redemption_option
+            columns:
+              - column: { name: id, value: "vip-1-day" }
+              - column: { name: label, value: "1 dia de VIP" }
+              - column: { name: required_vip_points, valueNumeric: 100 }
+              - column: { name: vip_days, valueNumeric: 1 }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 1 }
+        - insert:
+            tableName: vip_redemption_option
+            columns:
+              - column: { name: id, value: "vip-7-days" }
+              - column: { name: label, value: "7 dias de VIP" }
+              - column: { name: required_vip_points, valueNumeric: 500 }
+              - column: { name: vip_days, valueNumeric: 7 }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 2 }
+        - insert:
+            tableName: vip_redemption_option
+            columns:
+              - column: { name: id, value: "vip-30-days" }
+              - column: { name: label, value: "30 dias de VIP" }
+              - column: { name: required_vip_points, valueNumeric: 1500 }
+              - column: { name: vip_days, valueNumeric: 30 }
+              - column: { name: enabled, valueBoolean: true }
+              - column: { name: display_order, valueNumeric: 3 }
