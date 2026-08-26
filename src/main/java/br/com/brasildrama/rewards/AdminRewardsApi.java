@@ -35,6 +35,8 @@ record AdminRewardMission(
     Long target,
     String triggerType,
     String actionUrl,
+    String startsAt,
+    String endsAt,
     boolean enabled,
     long participants,
     long completed,
@@ -83,6 +85,8 @@ record AdminRewardMissionWrite(
     Long target,
     String triggerType,
     String actionUrl,
+    String startsAt,
+    String endsAt,
     boolean enabled
 ) {}
 record AdminVipOptionUpdate(boolean enabled) {}
@@ -156,8 +160,8 @@ class AdminRewardsApi {
         validateMission(request, true);
         try {
             jdbc.update("""
-                insert into reward_mission(id,title,description,reward_type,reward_amount,target,trigger_type,action_url,enabled)
-                values (?,?,?,?,?,?,?,?,?)
+                insert into reward_mission(id,title,description,reward_type,reward_amount,target,trigger_type,action_url,starts_at,ends_at,enabled)
+                values (?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 request.id().trim(),
                 request.title().trim(),
@@ -167,6 +171,8 @@ class AdminRewardsApi {
                 request.target(),
                 request.triggerType(),
                 request.actionUrl(),
+                parseDate(request.startsAt()),
+                parseDate(request.endsAt()),
                 request.enabled()
             );
         } catch (org.springframework.dao.DuplicateKeyException ex) {
@@ -181,7 +187,7 @@ class AdminRewardsApi {
         validateMission(request, false);
         int updated = jdbc.update("""
             update reward_mission
-               set title=?,description=?,reward_type=?,reward_amount=?,target=?,trigger_type=?,action_url=?,enabled=?
+               set title=?,description=?,reward_type=?,reward_amount=?,target=?,trigger_type=?,action_url=?,starts_at=?,ends_at=?,enabled=?
              where id=?
             """,
             request.title().trim(),
@@ -191,6 +197,8 @@ class AdminRewardsApi {
             request.target(),
             request.triggerType(),
             request.actionUrl(),
+            parseDate(request.startsAt()),
+            parseDate(request.endsAt()),
             request.enabled(),
             missionId
         );
@@ -247,6 +255,20 @@ class AdminRewardsApi {
         if (!ACTION_URLS.contains(request.actionUrl())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid action URL");
         }
+        var startsAt = parseDate(request.startsAt());
+        var endsAt = parseDate(request.endsAt());
+        if (startsAt != null && endsAt != null && !endsAt.isAfter(startsAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mission end must be after start");
+        }
+    }
+
+    private java.time.OffsetDateTime parseDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return java.time.OffsetDateTime.parse(value);
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission schedule");
+        }
     }
 
     private void validateId(String missionId) {
@@ -264,13 +286,13 @@ class AdminRewardsApi {
 
     private List<AdminRewardMission> missions() {
         return jdbc.query("""
-            select m.id,m.title,m.description,m.reward_type,m.reward_amount,m.target,m.trigger_type,m.action_url,m.enabled,
+            select m.id,m.title,m.description,m.reward_type,m.reward_amount,m.target,m.trigger_type,m.action_url,m.starts_at,m.ends_at,m.enabled,
                    count(um.user_id) participants,
                    count(*) filter (where um.status='COMPLETED') completed,
                    count(*) filter (where um.status='CLAIMED') claimed
             from reward_mission m
             left join user_mission um on um.mission_id=m.id
-            group by m.id,m.title,m.description,m.reward_type,m.reward_amount,m.target,m.trigger_type,m.action_url,m.enabled
+            group by m.id,m.title,m.description,m.reward_type,m.reward_amount,m.target,m.trigger_type,m.action_url,m.starts_at,m.ends_at,m.enabled
             order by m.enabled desc,m.title
             """,
             (rs, row) -> new AdminRewardMission(
@@ -282,6 +304,8 @@ class AdminRewardsApi {
                 rs.getObject("target") == null ? null : rs.getLong("target"),
                 rs.getString("trigger_type"),
                 rs.getString("action_url"),
+                rs.getObject("starts_at", java.time.OffsetDateTime.class) == null ? null : rs.getObject("starts_at", java.time.OffsetDateTime.class).toString(),
+                rs.getObject("ends_at", java.time.OffsetDateTime.class) == null ? null : rs.getObject("ends_at", java.time.OffsetDateTime.class).toString(),
                 rs.getBoolean("enabled"),
                 rs.getLong("participants"),
                 rs.getLong("completed"),
