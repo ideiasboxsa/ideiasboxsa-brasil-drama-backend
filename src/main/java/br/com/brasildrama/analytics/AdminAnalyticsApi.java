@@ -62,7 +62,7 @@ class AdminAnalyticsApi {
         return jdbc.queryForObject("""
             with sessions as (
                 select session_id, episode_id,
-                       max(user_id) user_id,
+                       (array_agg(user_id) filter (where user_id is not null))[1] user_id,
                        bool_or(event_type = 'play') played,
                        bool_or(event_type = 'completion') completed,
                        max(position_ms) position_ms,
@@ -90,7 +90,7 @@ class AdminAnalyticsApi {
         return jdbc.query("""
             with sessions as (
                 select drama_id, episode_id, session_id,
-                       max(user_id) user_id,
+                       (array_agg(user_id) filter (where user_id is not null))[1] user_id,
                        bool_or(event_type = 'play') played,
                        bool_or(event_type = 'completion') completed,
                        max(position_ms) position_ms,
