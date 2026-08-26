@@ -1,0 +1,65 @@
+databaseChangeLog:
+  - changeSet:
+      id: 017-google-play-purchases
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: google_play_purchase
+            columns:
+              - column:
+                  name: token_hash
+                  type: varchar(64)
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_google_play_purchase_user
+                    references: app_user(id)
+              - column:
+                  name: product_id
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_google_play_purchase_product
+                    references: commercial_product(product_id)
+              - column:
+                  name: product_type
+                  type: varchar(30)
+                  constraints: { nullable: false }
+              - column:
+                  name: order_id
+                  type: varchar(160)
+              - column:
+                  name: acknowledged
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints: { nullable: false }
+              - column:
+                  name: expires_at
+                  type: timestamptz
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints: { nullable: false }
+        - createIndex:
+            tableName: google_play_purchase
+            indexName: idx_google_play_purchase_user_product
+            columns:
+              - column: { name: user_id }
+              - column: { name: product_id }
+        - createIndex:
+            tableName: google_play_purchase
+            indexName: idx_google_play_purchase_subscription
+            columns:
+              - column: { name: user_id }
+              - column: { name: product_type }
+              - column: { name: expires_at, descending: true }
