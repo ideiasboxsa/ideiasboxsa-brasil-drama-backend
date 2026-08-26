@@ -106,7 +106,7 @@ class SupportTicketsApi {
         return find(ticketId);
     }
 
-    @GetMapping("/v1/admin/support-tickets")
+    @GetMapping({"/v1/admin/support-tickets", "/v1/admin/users/support-tickets"})
     List<SupportTicketDto> adminList(@RequestParam(required = false) String status) {
         if (status == null || status.isBlank()) {
             return jdbc.query("""
@@ -128,7 +128,7 @@ class SupportTicketsApi {
             """, this::map, normalizedStatus);
     }
 
-    @PostMapping("/v1/admin/support-tickets/{ticketId}/messages")
+    @PostMapping({"/v1/admin/support-tickets/{ticketId}/messages", "/v1/admin/users/support-tickets/{ticketId}/messages"})
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
     SupportTicketDto adminReply(@PathVariable UUID ticketId, @RequestBody SupportTicketMessageRequest request) {
@@ -138,7 +138,7 @@ class SupportTicketsApi {
         return find(ticketId);
     }
 
-    @PutMapping("/v1/admin/support-tickets/{ticketId}/assignment")
+    @PutMapping({"/v1/admin/support-tickets/{ticketId}/assignment", "/v1/admin/users/support-tickets/{ticketId}/assignment"})
     @Transactional
     SupportTicketDto assignment(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketAssignmentRequest request) {
         boolean assigned = request != null && Boolean.TRUE.equals(request.assigned());
@@ -156,7 +156,7 @@ class SupportTicketsApi {
         return find(ticketId);
     }
 
-    @PutMapping("/v1/admin/support-tickets/{ticketId}")
+    @PutMapping({"/v1/admin/support-tickets/{ticketId}", "/v1/admin/users/support-tickets/{ticketId}"})
     @Transactional
     SupportTicketDto update(@PathVariable UUID ticketId, @RequestBody SupportTicketUpdateRequest request) {
         String status = normalized(request == null ? null : request.status(), 24, "status");
