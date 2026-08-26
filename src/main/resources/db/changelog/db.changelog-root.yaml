@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/009-admin-iam.yaml
   - include:
       file: db/changelog/010-drama-admin.yaml
+  - include:
+      file: db/changelog/011-admin-password-reset.yaml

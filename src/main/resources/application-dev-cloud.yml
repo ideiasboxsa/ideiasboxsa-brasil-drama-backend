@@ -20,6 +20,16 @@ security:
     secret: ${JWT_SECRET}
     ttl: ${JWT_TTL:PT24H}
 
+admin:
+  password-reset:
+    ttl: ${ADMIN_PASSWORD_RESET_TTL:PT30M}
+    page-url: ${ADMIN_PASSWORD_RESET_PAGE_URL:https://studio-drama-dev.ideiasbox.com/forgot-password}
+
+mailgun:
+  api-key: ${MAILGUN_API_KEY:}
+  domain: ${MAILGUN_DOMAIN:}
+  from: ${MAILGUN_FROM:Brasil Drama <postmaster@mg.ideiaserp.com>}
+
 management:
   endpoints:
     web:
