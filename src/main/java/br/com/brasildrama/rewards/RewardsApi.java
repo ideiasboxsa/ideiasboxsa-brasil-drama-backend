@@ -65,8 +65,6 @@ class RewardsController {
 
 @Service
 class RewardsService {
-    private static final long[] CHECK_IN_REWARDS = {30, 30, 50, 50, 80, 100, 150};
-
     private final JdbcTemplate jdbc;
     private final ZoneId rewardsZone;
 
@@ -109,10 +107,11 @@ class RewardsService {
             (rs, rowNum) -> new PreviousCheckIn(rs.getDate(1).toLocalDate(), rs.getInt(2)), userId
         ).stream().findFirst().orElse(null);
 
+        var cycle = checkInRewards();
         int streakDay = previous != null && previous.date().equals(today.minusDays(1))
-            ? (previous.streakDay() % CHECK_IN_REWARDS.length) + 1
+            ? (previous.streakDay() % cycle.size()) + 1
             : 1;
-        long reward = CHECK_IN_REWARDS[streakDay - 1];
+        long reward = cycle.get(streakDay - 1);
 
         jdbc.update(
             "insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at) values (?,?,?,?,?,?,?,now())",
@@ -225,6 +224,7 @@ class RewardsService {
     }
 
     private RewardsCheckInDto checkInSnapshot(UUID userId, LocalDate today) {
+        var cycle = checkInRewards();
         var recent = jdbc.query(
             "select check_in_date,streak_day from daily_check_in where user_id=? order by check_in_date desc limit 1",
             (rs, rowNum) -> new PreviousCheckIn(rs.getDate(1).toLocalDate(), rs.getInt(2)), userId
@@ -237,7 +237,7 @@ class RewardsService {
             currentDay = recent.streakDay();
             streakDays = recent.streakDay();
         } else if (recent != null && recent.date().equals(today.minusDays(1))) {
-            currentDay = (recent.streakDay() % CHECK_IN_REWARDS.length) + 1;
+            currentDay = (recent.streakDay() % cycle.size()) + 1;
             streakDays = recent.streakDay();
         } else {
             currentDay = 1;
@@ -245,11 +245,20 @@ class RewardsService {
         }
 
         var days = new ArrayList<RewardsCheckInDayDto>();
-        for (int i = 1; i <= CHECK_IN_REWARDS.length; i++) {
+        for (int i = 1; i <= cycle.size(); i++) {
             boolean claimed = claimedToday ? i <= currentDay : i < currentDay && streakDays > 0;
-            days.add(new RewardsCheckInDayDto(i, CHECK_IN_REWARDS[i - 1], claimed));
+            days.add(new RewardsCheckInDayDto(i, cycle.get(i - 1), claimed));
         }
         return new RewardsCheckInDto(streakDays, currentDay, claimedToday, !claimedToday, days);
+    }
+
+    private List<Long> checkInRewards() {
+        var cycle = jdbc.query(
+            "select reward_amount from reward_checkin_cycle where enabled=true order by day_number",
+            (rs, row) -> rs.getLong(1)
+        );
+        if (cycle.isEmpty()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Check-in cycle is not configured");
+        return cycle;
     }
 
     private List<RewardMissionDto> missions(UUID userId) {
