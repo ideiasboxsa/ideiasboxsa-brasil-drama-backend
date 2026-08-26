@@ -1,0 +1,104 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-playback-analytics
+      author: codex
+      changes:
+        - createTable:
+            tableName: playback_event
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+              - column:
+                  name: session_id
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: episode_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: varchar(40)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: position_ms
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: duration_ms
+                  type: bigint
+              - column:
+                  name: quality
+                  type: varchar(30)
+              - column:
+                  name: subtitle
+                  type: varchar(60)
+              - column:
+                  name: error_code
+                  type: varchar(160)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: playback_event
+            baseColumnNames: user_id
+            referencedTableName: app_user
+            referencedColumnNames: id
+            constraintName: fk_playback_event_user
+            onDelete: SET NULL
+        - addForeignKeyConstraint:
+            baseTableName: playback_event
+            baseColumnNames: drama_id
+            referencedTableName: drama
+            referencedColumnNames: id
+            constraintName: fk_playback_event_drama
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: playback_event
+            baseColumnNames: episode_id
+            referencedTableName: episode
+            referencedColumnNames: id
+            constraintName: fk_playback_event_episode
+            onDelete: CASCADE
+        - createIndex:
+            tableName: playback_event
+            indexName: idx_playback_event_created_at
+            columns:
+              - column:
+                  name: created_at
+        - createIndex:
+            tableName: playback_event
+            indexName: idx_playback_event_drama_created
+            columns:
+              - column:
+                  name: drama_id
+              - column:
+                  name: created_at
+        - createIndex:
+            tableName: playback_event
+            indexName: idx_playback_event_session
+            columns:
+              - column:
+                  name: session_id
+              - column:
+                  name: episode_id
