@@ -61,6 +61,8 @@ interface GooglePlayPurchaseRepository extends JpaRepository<GooglePlayPurchase,
     Optional<GooglePlayPurchase> findFirstByUserIdAndProductTypeAndExpiresAtAfterOrderByExpiresAtDesc(
         UUID userId, String productType, OffsetDateTime now
     );
+    List<GooglePlayPurchase> findTop100ByOrderByCreatedAtDesc();
+    List<GooglePlayPurchase> findTop50ByUserIdOrderByCreatedAtDesc(UUID userId);
 }
 
 record GooglePurchaseVerifyRequest(
@@ -79,6 +81,15 @@ record GooglePurchaseVerifyResponse(
 ) {}
 record GoogleRestoreResponse(int restored, int balance, String activeSubscriptionProductId) {}
 record SubscriptionStatusResponse(boolean active, String productId, OffsetDateTime expiresAt) {}
+record PurchaseHistoryView(
+    UUID userId,
+    String productId,
+    String productType,
+    String orderId,
+    boolean acknowledged,
+    OffsetDateTime expiresAt,
+    OffsetDateTime createdAt
+) {}
 
 record PlayVerification(boolean valid, boolean acknowledged, String orderId, OffsetDateTime expiresAt) {}
 
@@ -273,6 +284,26 @@ class GooglePurchaseService {
             .orElseGet(() -> new SubscriptionStatusResponse(false, null, null));
     }
 
+    List<PurchaseHistoryView> history(UUID userId) {
+        return receipts.findTop50ByUserIdOrderByCreatedAtDesc(userId).stream().map(this::historyView).toList();
+    }
+
+    List<PurchaseHistoryView> adminHistory() {
+        return receipts.findTop100ByOrderByCreatedAtDesc().stream().map(this::historyView).toList();
+    }
+
+    private PurchaseHistoryView historyView(GooglePlayPurchase receipt) {
+        return new PurchaseHistoryView(
+            receipt.userId,
+            receipt.productId,
+            receipt.productType,
+            receipt.orderId,
+            receipt.acknowledged,
+            receipt.expiresAt,
+            receipt.createdAt
+        );
+    }
+
     private GooglePurchaseVerifyResponse response(GooglePlayPurchase receipt, int balance) {
         boolean subscription = "SUBSCRIPTION".equals(receipt.productType);
         boolean active = !subscription || (receipt.expiresAt != null && receipt.expiresAt.isAfter(OffsetDateTime.now()));
@@ -322,6 +353,16 @@ class GooglePurchaseApi {
     @GetMapping("/v1/subscriptions/status")
     SubscriptionStatusResponse subscription(java.security.Principal principal) {
         return purchases.subscription(userId(principal));
+    }
+
+    @GetMapping("/v1/me/purchases")
+    List<PurchaseHistoryView> history(java.security.Principal principal) {
+        return purchases.history(userId(principal));
+    }
+
+    @GetMapping("/v1/admin/monetization/purchases")
+    List<PurchaseHistoryView> adminHistory() {
+        return purchases.adminHistory();
     }
 
     private static UUID userId(java.security.Principal principal) {
