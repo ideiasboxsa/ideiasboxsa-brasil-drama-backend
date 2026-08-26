@@ -16,6 +16,20 @@ record AnalyticsSummary(
     long playbackErrors
 ) {}
 
+record AnalyticsRetention(
+    long started,
+    long reached25,
+    long reached50,
+    long reached75,
+    long completed
+) {}
+
+record AnalyticsError(
+    String code,
+    long occurrences,
+    long affectedSessions
+) {}
+
 record DramaAnalytics(
     UUID dramaId,
     String title,
@@ -40,6 +54,8 @@ record EpisodeAnalytics(
 record AdminCatalogAnalytics(
     int days,
     AnalyticsSummary summary,
+    AnalyticsRetention retention,
+    List<AnalyticsError> errors,
     List<DramaAnalytics> dramas,
     List<EpisodeAnalytics> episodes
 ) {}
@@ -55,7 +71,14 @@ class AdminAnalyticsApi {
     @GetMapping("/v1/admin/analytics/catalog")
     AdminCatalogAnalytics catalog(@RequestParam(defaultValue = "30") int days) {
         int period = normalizePeriod(days);
-        return new AdminCatalogAnalytics(period, summary(period), dramas(period), episodes(period));
+        return new AdminCatalogAnalytics(
+            period,
+            summary(period),
+            retention(period),
+            errors(period),
+            dramas(period),
+            episodes(period)
+        );
     }
 
     private AnalyticsSummary summary(int days) {
@@ -81,6 +104,54 @@ class AdminAnalyticsApi {
             """,
             (rs, row) -> new AnalyticsSummary(
                 rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getInt(4), rs.getLong(5)
+            ),
+            days
+        );
+    }
+
+    private AnalyticsRetention retention(int days) {
+        return jdbc.queryForObject("""
+            with sessions as (
+                select session_id, episode_id,
+                       bool_or(event_type = 'play') started,
+                       bool_or(event_type = 'progress_25') reached_25,
+                       bool_or(event_type = 'progress_50') reached_50,
+                       bool_or(event_type = 'progress_75') reached_75,
+                       bool_or(event_type = 'completion') completed
+                from playback_event
+                where created_at >= now() - (? * interval '1 day')
+                group by session_id, episode_id
+            )
+            select count(*) filter (where started),
+                   count(*) filter (where reached_25),
+                   count(*) filter (where reached_50),
+                   count(*) filter (where reached_75),
+                   count(*) filter (where completed)
+            from sessions
+            """,
+            (rs, row) -> new AnalyticsRetention(
+                rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getLong(4), rs.getLong(5)
+            ),
+            days
+        );
+    }
+
+    private List<AnalyticsError> errors(int days) {
+        return jdbc.query("""
+            select coalesce(nullif(error_code, ''), 'PLAYBACK_UNKNOWN') code,
+                   count(*) occurrences,
+                   count(distinct session_id) affected_sessions
+            from playback_event
+            where event_type = 'error'
+              and created_at >= now() - (? * interval '1 day')
+            group by coalesce(nullif(error_code, ''), 'PLAYBACK_UNKNOWN')
+            order by occurrences desc, code
+            limit 10
+            """,
+            (rs, row) -> new AnalyticsError(
+                rs.getString("code"),
+                rs.getLong("occurrences"),
+                rs.getLong("affected_sessions")
             ),
             days
         );
