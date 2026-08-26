@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-reward-mission-schedule
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: reward_mission
+            columns:
+              - column:
+                  name: starts_at
+                  type: timestamptz
+              - column:
+                  name: ends_at
+                  type: timestamptz
+        - createIndex:
+            tableName: reward_mission
+            indexName: idx_reward_mission_schedule
+            columns:
+              - column: { name: enabled }
+              - column: { name: starts_at }
+              - column: { name: ends_at }
