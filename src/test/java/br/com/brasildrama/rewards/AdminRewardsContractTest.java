@@ -26,6 +26,19 @@ class AdminRewardsContractTest {
         assertThat(result.missions()).isNotNull();
         assertThat(result.vipOptions()).isNotNull();
         assertThat(result.recentTransactions()).isNotNull();
+        assertThat(result.checkInCycle()).hasSize(7);
+    }
+
+    @Test
+    void updatesCheckInCycleAtomically() {
+        var updated = rewards.updateCheckInCycle(new AdminCheckInCycleUpdate(java.util.List.of(
+            new AdminCheckInDay(1, 25),
+            new AdminCheckInDay(2, 50),
+            new AdminCheckInDay(3, 100)
+        )));
+
+        assertThat(updated).extracting(AdminCheckInDay::rewardAmount).containsExactly(25L, 50L, 100L);
+        assertThat(rewards.overview().checkInCycle()).hasSize(3);
     }
 
     @Test
