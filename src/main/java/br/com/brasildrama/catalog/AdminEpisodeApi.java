@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -55,6 +56,29 @@ class AdminEpisodeApi {
         return ResponseEntity.ok(view(episode));
     }
 
+    @PostMapping("/reorder")
+    @Transactional
+    ResponseEntity<?> reorder(@PathVariable UUID dramaId, @Valid @RequestBody ReorderRequest request) {
+        var drama = dramas.findById(dramaId).orElse(null);
+        if (drama == null) return ResponseEntity.notFound().build();
+        if (drama.status == DramaStatus.ARCHIVED) return conflict("DRAMA_ARCHIVED");
+
+        var current = episodes.findByDramaIdOrderByNumberAsc(dramaId);
+        var requestedIds = request.episodeIds();
+        if (requestedIds.size() != current.size() || new HashSet<>(requestedIds).size() != current.size()
+            || !new HashSet<>(requestedIds).equals(current.stream().map(e -> e.id).collect(java.util.stream.Collectors.toSet()))) {
+            return ResponseEntity.badRequest().body(Map.of("code", "INVALID_EPISODE_ORDER"));
+        }
+
+        var byId = current.stream().collect(java.util.stream.Collectors.toMap(e -> e.id, e -> e));
+        var ordered = requestedIds.stream().map(byId::get).toList();
+        for (int index = 0; index < ordered.size(); index++) ordered.get(index).number = -(index + 1);
+        episodes.saveAllAndFlush(ordered);
+        for (int index = 0; index < ordered.size(); index++) ordered.get(index).number = index + 1;
+        episodes.saveAllAndFlush(ordered);
+        return ResponseEntity.ok(ordered.stream().map(this::view).toList());
+    }
+
     @DeleteMapping("/{episodeId}")
     ResponseEntity<?> delete(@PathVariable UUID dramaId, @PathVariable UUID episodeId) {
         var drama = dramas.findById(dramaId).orElse(null);
@@ -84,6 +108,8 @@ class AdminEpisodeApi {
     private static ResponseEntity<?> conflict(String code) {
         return ResponseEntity.status(409).body(Map.of("code", code));
     }
+
+    record ReorderRequest(@NotEmpty List<UUID> episodeIds) {}
 
     record EpisodeRequest(
         @Min(1) int number,
