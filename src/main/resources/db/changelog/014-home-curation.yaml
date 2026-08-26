@@ -1,0 +1,41 @@
+databaseChangeLog:
+  - changeSet:
+      id: 014-home-curation
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: home_placement
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_home_placement_drama
+                    references: drama(id)
+              - column:
+                  name: position
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: home_placement
+            columnNames: drama_id
+            constraintName: uk_home_placement_drama
+        - addUniqueConstraint:
+            tableName: home_placement
+            columnNames: position
+            constraintName: uk_home_placement_position

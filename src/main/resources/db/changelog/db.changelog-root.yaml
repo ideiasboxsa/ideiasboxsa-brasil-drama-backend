@@ -17,3 +17,5 @@ databaseChangeLog:
       file: db/changelog/012-drama-media.yaml
   - include:
       file: db/changelog/013-episode-admin-media.yaml
+  - include:
+      file: db/changelog/014-home-curation.yaml

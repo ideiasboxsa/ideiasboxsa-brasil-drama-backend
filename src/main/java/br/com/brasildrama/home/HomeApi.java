@@ -11,14 +11,19 @@ record HomeResponseDto(String heroDramaId, List<HomeSectionDto> sections) {}
 @RestController
 class HomeController {
     private final CatalogQueryService catalog;
+    private final HomePlacementRepository placements;
 
-    HomeController(CatalogQueryService catalog) {
+    HomeController(CatalogQueryService catalog, HomePlacementRepository placements) {
         this.catalog = catalog;
+        this.placements = placements;
     }
 
     @GetMapping("/v1/home")
     HomeResponseDto home(@RequestHeader(value = "Authorization", required = false) String authorization) {
-        var all = catalog.homeDramas();
+        var catalogItems = catalog.homeDramas();
+        var byId = catalogItems.stream().collect(java.util.stream.Collectors.toMap(CatalogQueryService.HomeDrama::dramaId, item -> item));
+        var curated = placements.findAllByOrderByPositionAsc().stream().map(p -> byId.get(p.dramaId.toString())).filter(Objects::nonNull).toList();
+        var all = curated.isEmpty() ? catalogItems : curated;
         var items = all.stream().map(d -> new HomeItemDto(
             d.dramaId(),
             d.firstEpisodeId(),

@@ -33,7 +33,7 @@ class CatalogController {
 
     @GetMapping("/dramas/{dramaId}")
     DramaDetailDto drama(@PathVariable UUID dramaId) {
-        var drama = dramas.findById(dramaId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        var drama = dramas.findById(dramaId).filter(d -> d.status == DramaStatus.PUBLISHED).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         var eps = episodes.findByDramaIdOrderByNumberAsc(dramaId).stream().map(this::episode).toList();
         return new DramaDetailDto(drama.id.toString(), drama.title, drama.synopsis, drama.genre, posterUrl(drama), media.readUrl(drama.backdropObjectKey), eps);
     }
@@ -42,7 +42,10 @@ class CatalogController {
     SearchResponseDto search(@RequestParam("q") String q, @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "0") int offset) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         int safeOffset = Math.max(0, offset);
-        var all = dramas.findByTitleContainingIgnoreCaseOrSynopsisContainingIgnoreCaseOrGenreContainingIgnoreCaseOrderByTitleAsc(q, q, q).stream().map(this::summary).toList();
+        var query = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
+        var all = dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
+            .filter(d -> d.title.toLowerCase(Locale.ROOT).contains(query) || d.synopsis.toLowerCase(Locale.ROOT).contains(query) || d.genre.toLowerCase(Locale.ROOT).contains(query))
+            .map(this::summary).toList();
         int from = Math.min(safeOffset, all.size());
         int to = Math.min(from + safeLimit, all.size());
         return new SearchResponseDto(all.subList(from, to), all.size(), safeLimit, safeOffset);
@@ -50,7 +53,7 @@ class CatalogController {
 
     @GetMapping("/categories")
     List<CategoryDto> categories() {
-        return dramas.findAll().stream().map(d -> d.genre).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).distinct().sorted(String.CASE_INSENSITIVE_ORDER).map(name -> new CategoryDto(slug(name), name, 0)).toList();
+        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream().map(d -> d.genre).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).distinct().sorted(String.CASE_INSENSITIVE_ORDER).map(name -> new CategoryDto(slug(name), name, 0)).toList();
     }
 
     @GetMapping("/categories/{slug}/dramas")

@@ -6,7 +6,7 @@ import java.util.*;
 
 @Service
 public class CatalogQueryService {
-    public record HomeDrama(String dramaId, String firstEpisodeId, String genre, String coverUrl) {}
+    public record HomeDrama(String dramaId, String title, String firstEpisodeId, String genre, String coverUrl) {}
     public record EpisodeAccess(String episodeId, int coinPrice, boolean free) {}
 
     private final DramaRepository dramas;
@@ -22,6 +22,7 @@ public class CatalogQueryService {
     public List<HomeDrama> homeDramas() {
         return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream().map(d -> new HomeDrama(
             d.id.toString(),
+            d.title,
             episodes.findByDramaIdOrderByNumberAsc(d.id).stream().findFirst().map(e -> e.id.toString()).orElse(null),
             d.genre,
             d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey)
