@@ -30,6 +30,15 @@ record AnalyticsError(
     long affectedSessions
 ) {}
 
+record AnalyticsBreakdown(String value, long sessions) {}
+
+record AnalyticsExperience(
+    long totalSessions,
+    long sessionsWithSubtitles,
+    List<AnalyticsBreakdown> qualities,
+    List<AnalyticsBreakdown> subtitles
+) {}
+
 record DramaAnalytics(
     UUID dramaId,
     String title,
@@ -55,6 +64,7 @@ record AdminCatalogAnalytics(
     int days,
     AnalyticsSummary summary,
     AnalyticsRetention retention,
+    AnalyticsExperience experience,
     List<AnalyticsError> errors,
     List<DramaAnalytics> dramas,
     List<EpisodeAnalytics> episodes
@@ -75,6 +85,7 @@ class AdminAnalyticsApi {
             period,
             summary(period),
             retention(period),
+            experience(period),
             errors(period),
             dramas(period),
             episodes(period)
@@ -134,6 +145,59 @@ class AdminAnalyticsApi {
             ),
             days
         );
+    }
+
+    private AnalyticsExperience experience(int days) {
+        long totalSessions = count("""
+            select count(*) from (
+                select distinct session_id, episode_id
+                from playback_event
+                where created_at >= now() - (? * interval '1 day')
+            ) sessions
+            """, days);
+        long sessionsWithSubtitles = count("""
+            select count(*) from (
+                select distinct on (session_id, episode_id) subtitle
+                from playback_event
+                where created_at >= now() - (? * interval '1 day')
+                order by session_id, episode_id, created_at desc
+            ) latest
+            where coalesce(subtitle, 'OFF') not in ('OFF', 'AUTO')
+            """, days);
+
+        return new AnalyticsExperience(
+            totalSessions,
+            sessionsWithSubtitles,
+            breakdown("quality", days),
+            breakdown("subtitle", days)
+        );
+    }
+
+    private List<AnalyticsBreakdown> breakdown(String column, int days) {
+        if (!column.equals("quality") && !column.equals("subtitle")) {
+            throw new IllegalArgumentException("Unsupported analytics dimension");
+        }
+        String sql = """
+            select coalesce(nullif(%s, ''), 'UNKNOWN') value, count(*) sessions
+            from (
+                select distinct on (session_id, episode_id) %s
+                from playback_event
+                where created_at >= now() - (? * interval '1 day')
+                order by session_id, episode_id, created_at desc
+            ) latest
+            group by coalesce(nullif(%s, ''), 'UNKNOWN')
+            order by sessions desc, value
+            """.formatted(column, column, column);
+        return jdbc.query(
+            sql,
+            (rs, row) -> new AnalyticsBreakdown(rs.getString("value"), rs.getLong("sessions")),
+            days
+        );
+    }
+
+    private long count(String sql, int days) {
+        Long value = jdbc.queryForObject(sql, Long.class, days);
+        return value == null ? 0 : value;
     }
 
     private List<AnalyticsError> errors(int days) {
