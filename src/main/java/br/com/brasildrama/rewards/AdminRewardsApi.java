@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 
 record AdminRewardsSummary(
     long usersWithRewards,
@@ -58,11 +59,32 @@ record AdminRewardsView(
 ) {}
 
 record AdminRewardMissionUpdate(boolean enabled) {}
+record AdminRewardMissionWrite(
+    String id,
+    String title,
+    String description,
+    String rewardType,
+    long rewardAmount,
+    Long target,
+    String triggerType,
+    String actionUrl,
+    boolean enabled
+) {}
 record AdminVipOptionUpdate(boolean enabled) {}
 
 @RestController
 @RequestMapping("/v1/admin/rewards")
 class AdminRewardsApi {
+    private static final Set<String> REWARD_TYPES = Set.of("BONUS", "VIP_POINTS");
+    private static final Set<String> TRIGGER_TYPES = Set.of("EPISODE_COMPLETED");
+    private static final Set<String> ACTION_URLS = Set.of(
+        "brasildrama://home",
+        "brasildrama://discover",
+        "brasildrama://rewards",
+        "brasildrama://library",
+        "brasildrama://account"
+    );
+
     private final JdbcTemplate jdbc;
 
     AdminRewardsApi(JdbcTemplate jdbc) {
@@ -92,23 +114,64 @@ class AdminRewardsApi {
         return new AdminRewardsView(summary, ads, missions(), vipOptions());
     }
 
+    @PostMapping("/missions")
+    @ResponseStatus(HttpStatus.CREATED)
+    AdminRewardMission createMission(@RequestBody AdminRewardMissionWrite request) {
+        validateMission(request, true);
+        try {
+            jdbc.update("""
+                insert into reward_mission(id,title,description,reward_type,reward_amount,target,trigger_type,action_url,enabled)
+                values (?,?,?,?,?,?,?,?,?)
+                """,
+                request.id().trim(),
+                request.title().trim(),
+                request.description().trim(),
+                request.rewardType(),
+                request.rewardAmount(),
+                request.target(),
+                request.triggerType(),
+                request.actionUrl(),
+                request.enabled()
+            );
+        } catch (org.springframework.dao.DuplicateKeyException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mission id already exists");
+        }
+        return mission(request.id());
+    }
+
+    @PutMapping("/missions/{missionId}/details")
+    AdminRewardMission updateMissionDetails(@PathVariable String missionId, @RequestBody AdminRewardMissionWrite request) {
+        validateId(missionId);
+        validateMission(request, false);
+        int updated = jdbc.update("""
+            update reward_mission
+               set title=?,description=?,reward_type=?,reward_amount=?,target=?,trigger_type=?,action_url=?,enabled=?
+             where id=?
+            """,
+            request.title().trim(),
+            request.description().trim(),
+            request.rewardType(),
+            request.rewardAmount(),
+            request.target(),
+            request.triggerType(),
+            request.actionUrl(),
+            request.enabled(),
+            missionId
+        );
+        if (updated == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found");
+        return mission(missionId);
+    }
+
     @PutMapping("/missions/{missionId}")
     AdminRewardMission updateMission(@PathVariable String missionId, @RequestBody AdminRewardMissionUpdate request) {
-        if (missionId == null || missionId.isBlank() || missionId.length() > 80) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission id");
-        }
+        validateId(missionId);
         int updated = jdbc.update(
             "update reward_mission set enabled=? where id=?",
             request.enabled(),
             missionId
         );
-        if (updated == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found");
-        }
-        return missions().stream()
-            .filter(item -> item.id().equals(missionId))
-            .findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found"));
+        if (updated == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found");
+        return mission(missionId);
     }
 
     @PutMapping("/vip/{optionId}")
@@ -117,13 +180,50 @@ class AdminRewardsApi {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid VIP option id");
         }
         int updated = jdbc.update("update vip_redemption_option set enabled=? where id=?", request.enabled(), optionId);
-        if (updated == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found");
-        }
+        if (updated == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found");
         return vipOptions().stream()
             .filter(item -> item.id().equals(optionId))
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "VIP option not found"));
+    }
+
+    private void validateMission(AdminRewardMissionWrite request, boolean requireId) {
+        if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mission payload is required");
+        if (requireId) validateId(request.id());
+        if (request.title() == null || request.title().isBlank() || request.title().length() > 160) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission title");
+        }
+        if (request.description() == null || request.description().isBlank() || request.description().length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission description");
+        }
+        if (!REWARD_TYPES.contains(request.rewardType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reward type");
+        }
+        if (request.rewardAmount() <= 0 || request.rewardAmount() > 1_000_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reward amount");
+        }
+        if (request.target() == null || request.target() <= 0 || request.target() > 1_000_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission target");
+        }
+        if (!TRIGGER_TYPES.contains(request.triggerType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid trigger type");
+        }
+        if (!ACTION_URLS.contains(request.actionUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid action URL");
+        }
+    }
+
+    private void validateId(String missionId) {
+        if (missionId == null || missionId.isBlank() || missionId.length() > 80 || !missionId.matches("[a-z0-9]+(?:-[a-z0-9]+)*")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid mission id");
+        }
+    }
+
+    private AdminRewardMission mission(String missionId) {
+        return missions().stream()
+            .filter(item -> item.id().equals(missionId))
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mission not found"));
     }
 
     private List<AdminRewardMission> missions() {
