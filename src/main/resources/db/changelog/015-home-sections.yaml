@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 015-home-sections
+      author: brasil-drama
+      context: base
+      changes:
+        - dropUniqueConstraint:
+            tableName: home_placement
+            constraintName: uk_home_placement_position
+        - addColumn:
+            tableName: home_placement
+            columns:
+              - column:
+                  name: section_key
+                  type: varchar(80)
+                  defaultValue: FOR_YOU
+                  constraints:
+                    nullable: false
+              - column:
+                  name: section_title
+                  type: varchar(120)
+                  defaultValue: Para você
+                  constraints:
+                    nullable: false
+              - column:
+                  name: section_position
+                  type: integer
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_hero
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: >
+              UPDATE home_placement
+              SET is_hero = true
+              WHERE id = (
+                SELECT id FROM home_placement
+                ORDER BY position ASC
+                LIMIT 1
+              )
+        - addUniqueConstraint:
+            tableName: home_placement
+            columnNames: section_key, position
+            constraintName: uk_home_placement_section_position
+        - createIndex:
+            tableName: home_placement
+            indexName: idx_home_placement_section_order
+            columns:
+              - column: { name: section_position }
+              - column: { name: position }
