@@ -3,6 +3,7 @@ package br.com.brasildrama.home;
 import br.com.brasildrama.catalog.CatalogQueryService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,7 +94,7 @@ class AdminHomeCurationApi {
 
     record UpdateHomeCurationRequest(UUID heroDramaId, List<@Valid HomeSectionRequest> sections, List<UUID> dramaIds) {}
     record HomeSectionRequest(@NotBlank @Size(max = 80) String type, @NotBlank @Size(max = 120) String title,
-                              @Size(min = 1, max = 20) List<UUID> dramaIds) {}
+                              @NotNull @Size(min = 1, max = 20) List<UUID> dramaIds) {}
     record HomeCurationItem(UUID dramaId, String title, String genre, String imageUrl) {}
     record HomeCurationSection(String type, String title, List<HomeCurationItem> items) {}
     record HomeCurationView(UUID heroDramaId, List<HomeCurationSection> sections,
