@@ -66,7 +66,8 @@ class AdminHomeCurationApi {
                 "Séries ainda não vistas recentemente têm prioridade",
                 "Até três títulos do mesmo gênero antes de repetir a categoria",
                 "Trilhos de gênero exigem ao menos duas séries publicadas",
-                "Reproduções únicas dos últimos 30 dias",
+                "Reproduções, retenção em 75% e conclusões dos últimos 30 dias",
+                "Falhas de reprodução reduzem a posição no ranking",
                 "Data de publicação do catálogo",
                 "Gêneros presentes nas séries publicadas"
             )
