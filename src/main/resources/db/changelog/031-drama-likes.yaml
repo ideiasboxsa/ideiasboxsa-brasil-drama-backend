@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 031-drama-likes
+      author: brasil-drama
+      changes:
+        - createTable:
+            tableName: drama_like
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: drama_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_drama_like_drama
+                    references: drama(id)
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_drama_like_user
+                    references: app_user(id)
+              - column:
+                  name: visitor_id
+                  type: varchar(64)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: alter table drama_like add constraint ck_drama_like_principal check ((user_id is not null)::int + (visitor_id is not null)::int = 1)
+        - sql:
+            sql: create unique index uk_drama_like_user on drama_like(drama_id,user_id) where user_id is not null
+        - sql:
+            sql: create unique index uk_drama_like_visitor on drama_like(drama_id,visitor_id) where visitor_id is not null
+        - createIndex:
+            tableName: drama_like
+            indexName: idx_drama_like_drama
+            columns:
+              - column: { name: drama_id }
