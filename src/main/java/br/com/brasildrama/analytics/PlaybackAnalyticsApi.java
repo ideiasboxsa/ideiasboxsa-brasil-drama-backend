@@ -23,7 +23,8 @@ record PlaybackEventRequest(
     Long durationMs,
     String quality,
     String subtitle,
-    String errorCode
+    String errorCode,
+    String visitorId
 ) {}
 
 @RestController
@@ -54,16 +55,17 @@ class PlaybackAnalyticsApi {
         }
 
         UUID userId = authenticatedUser(authentication);
+        String visitorId = anonymousVisitor(request.visitorId());
         int inserted = jdbc.update("""
             insert into playback_event (
-                id, user_id, session_id, drama_id, episode_id, event_type,
+                id, user_id, visitor_id, session_id, drama_id, episode_id, event_type,
                 position_ms, duration_ms, quality, subtitle, error_code
             )
-            select ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            select ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             from episode e
             where e.id = ? and e.drama_id = ?
             """,
-            UUID.randomUUID(), userId, sessionId, dramaId, episodeId, event,
+            UUID.randomUUID(), userId, visitorId, sessionId, dramaId, episodeId, event,
             request.positionMs(), request.durationMs(),
             limitedNullable(request.quality(), 30, "quality"),
             limitedNullable(request.subtitle(), 60, "subtitle"),
@@ -74,6 +76,15 @@ class PlaybackAnalyticsApi {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Drama or episode not found");
         }
         return ResponseEntity.accepted().location(URI.create("/v1/analytics/playback/events")).build();
+    }
+
+    private static String anonymousVisitor(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        if (!normalized.matches("[A-Za-z0-9_-]{16,64}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid visitorId");
+        }
+        return normalized;
     }
 
     private static UUID authenticatedUser(Authentication authentication) {
