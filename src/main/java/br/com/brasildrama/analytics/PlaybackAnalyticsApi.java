@@ -4,8 +4,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -76,6 +78,13 @@ class PlaybackAnalyticsApi {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Drama or episode not found");
         }
         return ResponseEntity.accepted().location(URI.create("/v1/analytics/playback/events")).build();
+    }
+
+    @DeleteMapping("/v1/analytics/playback/visitor")
+    ResponseEntity<Void> resetVisitor(@RequestHeader("X-Visitor-Id") String visitorId) {
+        String normalized = anonymousVisitor(visitorId);
+        jdbc.update("update playback_event set visitor_id = null where visitor_id = ?", normalized);
+        return ResponseEntity.noContent().build();
     }
 
     private static String anonymousVisitor(String value) {
