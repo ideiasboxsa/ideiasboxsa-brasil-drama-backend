@@ -32,8 +32,10 @@ class PublicCatalogContractTest {
             .andExpect(jsonPath("$.id").value("11111111-1111-1111-1111-111111111111"))
             .andExpect(jsonPath("$.episodes[0].number").value(1))
             .andExpect(jsonPath("$.episodes[0].free").value(true))
+            .andExpect(jsonPath("$.episodes[0].videoUrl").isNotEmpty())
             .andExpect(jsonPath("$.episodes[1].coinPrice").value(30))
-            .andExpect(jsonPath("$.episodes[1].free").value(false));
+            .andExpect(jsonPath("$.episodes[1].free").value(false))
+            .andExpect(jsonPath("$.episodes[1].videoUrl").isNotEmpty());
     }
 
     @Test
