@@ -28,7 +28,8 @@ record SupportTicketDto(
     List<SupportTicketMessageDto> messages, Integer rating, String ratingComment, OffsetDateTime ratedAt,
     String priority, OffsetDateTime responseDueAt, boolean overdue,
     UUID assignedOperatorId, String assignedOperatorName, OffsetDateTime assignedAt,
-    List<SupportTicketAuditDto> auditTrail, OffsetDateTime createdAt, OffsetDateTime updatedAt
+    String waitingFor, boolean unreadByUser, List<SupportTicketAuditDto> auditTrail,
+    OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
@@ -76,6 +77,15 @@ public class SupportTicketsApi {
             """, this::map, userId(authentication));
     }
 
+    @PostMapping("/v1/me/support-tickets/{ticketId}/read")
+    @Transactional
+    SupportTicketDto markRead(Authentication authentication, @PathVariable UUID ticketId) {
+        int changed = jdbc.update("update support_ticket set user_last_read_at=now() where id=? and user_id=?",
+            ticketId, userId(authentication));
+        if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+        return find(ticketId);
+    }
+
     @PostMapping("/v1/me/support-tickets/{ticketId}/messages")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
@@ -112,6 +122,7 @@ public class SupportTicketsApi {
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String priority,
         @RequestParam(required = false) Boolean assigned,
+        @RequestParam(required = false) String waitingFor,
         @RequestParam(required = false) String q
     ) {
         StringBuilder sql = new StringBuilder("""
@@ -136,6 +147,17 @@ public class SupportTicketsApi {
         }
         if (assigned != null) {
             sql.append(assigned ? " and t.assigned_operator_id is not null" : " and t.assigned_operator_id is null");
+        }
+        if (waitingFor != null && !waitingFor.isBlank()) {
+            String value = waitingFor.trim().toUpperCase(Locale.ROOT);
+            if (!Set.of("SUPPORT", "USER").contains(value)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_WAITING_FOR");
+            }
+            sql.append("""
+                 and coalesce((select m.sender from support_ticket_message m
+                 where m.ticket_id=t.id order by m.created_at desc,m.id desc limit 1),'USER')=?
+                """);
+            args.add("SUPPORT".equals(value) ? "USER" : "ADMIN");
         }
         if (q != null && !q.isBlank()) {
             String term = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
@@ -238,6 +260,23 @@ public class SupportTicketsApi {
             ), ticketId);
     }
 
+    private String waitingFor(UUID ticketId) {
+        List<String> senders = jdbc.query("""
+            select sender from support_ticket_message where ticket_id=?
+            order by created_at desc,id desc limit 1
+            """, (rs, row) -> rs.getString(1), ticketId);
+        return !senders.isEmpty() && "ADMIN".equals(senders.getFirst()) ? "USER" : "SUPPORT";
+    }
+
+    private boolean unreadByUser(UUID ticketId) {
+        Integer count = jdbc.queryForObject("""
+            select count(*) from support_ticket_message m join support_ticket t on t.id=m.ticket_id
+            where m.ticket_id=? and m.sender='ADMIN'
+            and m.created_at>coalesce(t.user_last_read_at,t.created_at)
+            """, Integer.class, ticketId);
+        return count != null && count > 0;
+    }
+
     private void requireOwnedOpenTicket(UUID ticketId, UUID userId) {
         List<String> statuses = jdbc.query("select status from support_ticket where id=? and user_id=?",
             (rs, row) -> rs.getString(1), ticketId, userId);
@@ -283,7 +322,8 @@ public class SupportTicketsApi {
             (Integer) rs.getObject("rating"), rs.getString("rating_comment"), rs.getObject("rated_at", OffsetDateTime.class),
             rs.getString("priority"), responseDueAt, overdue,
             rs.getObject("assigned_operator_id", UUID.class), rs.getString("assigned_operator_name"), rs.getObject("assigned_at", OffsetDateTime.class),
-            auditTrail(id), rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
+            waitingFor(id), unreadByUser(id), auditTrail(id),
+            rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }
 
