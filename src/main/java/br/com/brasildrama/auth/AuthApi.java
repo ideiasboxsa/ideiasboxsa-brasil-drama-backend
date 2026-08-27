@@ -56,6 +56,7 @@ public class AuthApi {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
         if (user.passwordHash == null || !passwords.matches(request.password(), user.passwordHash))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+        rewardGrants.grantWelcomeBonus(user.id);
         return response(user);
     }
 
