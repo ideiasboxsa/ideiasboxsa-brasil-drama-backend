@@ -19,10 +19,12 @@ class AdminHomeCurationApi {
     private static final Pattern SECTION_TYPE = Pattern.compile("[A-Z][A-Z0-9_]{1,79}");
     private final HomePlacementRepository placements;
     private final CatalogQueryService catalog;
+    private final HomeController discovery;
 
-    AdminHomeCurationApi(HomePlacementRepository placements, CatalogQueryService catalog) {
+    AdminHomeCurationApi(HomePlacementRepository placements, CatalogQueryService catalog, HomeController discovery) {
         this.placements = placements;
         this.catalog = catalog;
+        this.discovery = discovery;
     }
 
     @GetMapping
@@ -43,7 +45,37 @@ class AdminHomeCurationApi {
         var heroDramaId = rows.stream().filter(p -> p.hero && byId.containsKey(p.dramaId.toString()))
             .map(p -> p.dramaId).findFirst().orElseGet(() -> selected.isEmpty() ? null : selected.getFirst().dramaId());
 
-        return new HomeCurationView(heroDramaId, sections, selected, available.stream().map(this::item).toList());
+        var curatedTypes = sections.stream().map(HomeCurationSection::type).collect(Collectors.toSet());
+        var automaticSections = discovery.home(null, null).sections().stream()
+            .filter(section -> !curatedTypes.contains(section.type()))
+            .map(section -> new HomeAutomationSection(
+                section.type(),
+                section.title(),
+                section.items().stream()
+                    .map(homeItem -> byId.get(homeItem.dramaId()))
+                    .filter(Objects::nonNull)
+                    .map(this::item)
+                    .toList()
+            ))
+            .filter(section -> !section.items().isEmpty())
+            .toList();
+        var automation = new HomeAutomationView(
+            automaticSections,
+            List.of(
+                "Preferências de gênero do usuário nos últimos 90 dias",
+                "Reproduções únicas dos últimos 30 dias",
+                "Data de publicação do catálogo",
+                "Gêneros presentes nas séries publicadas"
+            )
+        );
+
+        return new HomeCurationView(
+            heroDramaId,
+            sections,
+            selected,
+            available.stream().map(this::item).toList(),
+            automation
+        );
     }
 
     @PutMapping
@@ -97,6 +129,9 @@ class AdminHomeCurationApi {
                               @NotNull @Size(min = 1, max = 20) List<UUID> dramaIds) {}
     record HomeCurationItem(UUID dramaId, String title, String genre, String imageUrl) {}
     record HomeCurationSection(String type, String title, List<HomeCurationItem> items) {}
+    record HomeAutomationSection(String type, String title, List<HomeCurationItem> items) {}
+    record HomeAutomationView(List<HomeAutomationSection> sections, List<String> signals) {}
     record HomeCurationView(UUID heroDramaId, List<HomeCurationSection> sections,
-                            List<HomeCurationItem> selected, List<HomeCurationItem> available) {}
+                            List<HomeCurationItem> selected, List<HomeCurationItem> available,
+                            HomeAutomationView automation) {}
 }
