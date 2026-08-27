@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "spring.liquibase.contexts=base",
     "security.jwt.secret=test-secret-for-brasil-drama-must-have-32-bytes",
     "rewards.welcome.enabled=true",
-    "rewards.welcome.bonus=50"
+    "rewards.welcome.bonus=100"
 })
 @AutoConfigureMockMvc
 class WelcomeBonusContractTest {
@@ -39,7 +39,20 @@ class WelcomeBonusContractTest {
 
         mvc.perform(get("/v1/rewards/overview").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.bonusBalance").value(50));
+            .andExpect(jsonPath("$.bonusBalance").value(100));
+
+        var secondLogin = mvc.perform(post("/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"%s","password":"senha-segura-123"}
+                    """.formatted(email)))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        var secondToken = objectMapper.readTree(secondLogin).get("accessToken").asText();
+
+        mvc.perform(get("/v1/rewards/overview").header("Authorization", "Bearer " + secondToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.bonusBalance").value(100));
 
         mvc.perform(post("/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -50,6 +63,6 @@ class WelcomeBonusContractTest {
 
         mvc.perform(get("/v1/rewards/overview").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.bonusBalance").value(50));
+            .andExpect(jsonPath("$.bonusBalance").value(100));
     }
 }
