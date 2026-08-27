@@ -64,6 +64,8 @@ class AdminHomeCurationApi {
             List.of(
                 "Preferências de gênero do usuário nos últimos 90 dias",
                 "Séries ainda não vistas recentemente têm prioridade",
+                "Até três títulos do mesmo gênero antes de repetir a categoria",
+                "Trilhos de gênero exigem ao menos duas séries publicadas",
                 "Reproduções únicas dos últimos 30 dias",
                 "Data de publicação do catálogo",
                 "Gêneros presentes nas séries publicadas"
