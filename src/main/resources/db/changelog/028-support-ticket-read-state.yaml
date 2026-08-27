@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 028-support-ticket-read-state
+      author: codex
+      context: base
+      changes:
+        - addColumn:
+            tableName: support_ticket
+            columns:
+              - column:
+                  name: user_last_read_at
+                  type: timestamptz
+        - createIndex:
+            tableName: support_ticket_message
+            indexName: idx_support_ticket_message_latest
+            columns:
+              - column: { name: ticket_id }
+              - column: { name: created_at, descending: true }
