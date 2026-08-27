@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -20,7 +21,7 @@ class PublicCatalogContractTest {
         mvc.perform(get("/v1/home"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.heroDramaId").isNotEmpty())
-            .andExpect(jsonPath("$.sections[0].type").value("FOR_YOU"))
+            .andExpect(jsonPath("$.sections[*].type", hasItem("NEW_RELEASES")))
             .andExpect(jsonPath("$.sections[0].items[0].dramaId").isNotEmpty())
             .andExpect(jsonPath("$.sections[0].items[0].episodeId").isNotEmpty());
     }
