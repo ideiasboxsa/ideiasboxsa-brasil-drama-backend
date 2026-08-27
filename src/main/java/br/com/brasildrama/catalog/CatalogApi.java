@@ -44,8 +44,14 @@ class CatalogController {
         int safeOffset = Math.max(0, offset);
         var query = normalize(q);
         var all = dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
-            .filter(d -> normalize(d.title).contains(query) || normalize(d.synopsis).contains(query) || normalize(d.genre).contains(query))
-            .map(this::summary).toList();
+            .filter(d -> matchesSearch(d, query))
+            .sorted(
+                Comparator.comparingInt((DramaEntity d) -> searchScore(d, query)).reversed()
+                    .thenComparing(d -> normalize(d.title))
+                    .thenComparing(d -> d.id)
+            )
+            .map(this::summary)
+            .toList();
         int from = Math.min(safeOffset, all.size());
         int to = Math.min(from + safeLimit, all.size());
         return new SearchResponseDto(all.subList(from, to), all.size(), safeLimit, safeOffset);
@@ -70,6 +76,28 @@ class CatalogController {
             .filter(d -> slug(d.genre).equalsIgnoreCase(slug))
             .map(this::summary)
             .toList();
+    }
+
+    private static boolean matchesSearch(DramaEntity drama, String query) {
+        if (query.isBlank()) return true;
+        return normalize(drama.title).contains(query)
+            || normalize(drama.genre).contains(query)
+            || normalize(drama.synopsis).contains(query);
+    }
+
+    private static int searchScore(DramaEntity drama, String query) {
+        if (query.isBlank()) return 0;
+        String title = normalize(drama.title);
+        String genre = normalize(drama.genre);
+        String synopsis = normalize(drama.synopsis);
+        if (title.equals(query)) return 500;
+        if (title.startsWith(query)) return 400;
+        if (title.contains(query)) return 300;
+        if (genre.equals(query)) return 250;
+        if (genre.startsWith(query)) return 220;
+        if (genre.contains(query)) return 200;
+        if (synopsis.contains(query)) return 100;
+        return 0;
     }
 
     private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, posterUrl(d), media.readUrl(d.backdropObjectKey)); }
