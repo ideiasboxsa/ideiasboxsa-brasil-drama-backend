@@ -25,7 +25,8 @@ record ContinueWatchingItemDto(
     String episodeTitle,
     long positionMs,
     Long durationMs,
-    String updatedAt
+    String updatedAt,
+    String imageUrl
 ) {}
 record ContinueWatchingResponseDto(List<ContinueWatchingItemDto> items) {}
 
@@ -80,7 +81,8 @@ class LibraryController {
                 rs.getObject("episode_id", UUID.class).toString(),
                 rs.getLong("position_ms"),
                 nullableLong(rs, "duration_ms"),
-                rs.getObject("updated_at", OffsetDateTime.class).toString()
+                rs.getObject("updated_at", OffsetDateTime.class).toString(),
+                rs.getString("cover_url")
             ),
             userId(authentication)
         );
@@ -140,7 +142,7 @@ class LibraryController {
     ContinueWatchingResponseDto continueWatching(Authentication authentication) {
         var items = jdbc.query(
             """
-            select h.drama_id, d.title drama_title, d.synopsis drama_synopsis, d.genre drama_genre,
+            select h.drama_id, d.title drama_title, d.synopsis drama_synopsis, d.genre drama_genre, d.cover_url,
                    h.episode_id, e.number episode_number, e.title episode_title,
                    h.position_ms, h.duration_ms, h.updated_at
               from playback_history h
@@ -210,7 +212,7 @@ class VisitorLibraryController {
                    and p.event_type in ('play', 'pause', 'progress_25', 'progress_50', 'progress_75')
                  order by p.drama_id, p.created_at desc
             )
-            select l.drama_id, d.title drama_title, d.synopsis drama_synopsis, d.genre drama_genre,
+            select l.drama_id, d.title drama_title, d.synopsis drama_synopsis, d.genre drama_genre, d.cover_url,
                    l.episode_id, e.number episode_number, e.title episode_title,
                    l.position_ms, l.duration_ms, l.created_at updated_at
               from latest l
@@ -230,7 +232,8 @@ class VisitorLibraryController {
                 rs.getString("episode_title"),
                 rs.getLong("position_ms"),
                 nullableLongValue(rs, "duration_ms"),
-                rs.getObject("updated_at", OffsetDateTime.class).toString()
+                rs.getObject("updated_at", OffsetDateTime.class).toString(),
+                rs.getString("cover_url")
             ),
             normalized
         );
