@@ -74,19 +74,26 @@ class HomeController {
         UUID userId = authenticatedUser(authentication);
         if (userId == null && visitorId == null) return;
 
-        String identityColumn = userId != null ? "p.user_id" : "p.visitor_id";
-        Object identity = userId != null ? userId : visitorId;
+        String identityFilter;
+        Object[] identityArgs;
+        if (userId != null && visitorId != null) {
+            identityFilter = "(p.user_id = ? or p.visitor_id = ?)";
+            identityArgs = new Object[]{userId, visitorId};
+        } else {
+            identityFilter = userId != null ? "p.user_id = ?" : "p.visitor_id = ?";
+            identityArgs = new Object[]{userId != null ? userId : visitorId};
+        }
         var preferredGenres = jdbc.query("""
             select d.genre
             from playback_event p
             join drama d on d.id = p.drama_id
-            where %s = ?
+            where %s
               and p.event_type = 'play'
               and p.created_at >= now() - interval '90 days'
             group by d.genre
             order by count(distinct p.session_id) desc, d.genre
             limit 3
-            """.formatted(identityColumn), (rs, row) -> rs.getString(1), identity);
+            """.formatted(identityFilter), (rs, row) -> rs.getString(1), identityArgs);
 
         if (preferredGenres.isEmpty()) return;
         var recommendations = byId.values().stream()
@@ -283,14 +290,21 @@ class HomeController {
     private Set<String> recentlyWatched(Authentication authentication, String visitorId) {
         UUID userId = authenticatedUser(authentication);
         if (userId == null && visitorId == null) return Set.of();
-        String identityColumn = userId != null ? "user_id" : "visitor_id";
-        Object identity = userId != null ? userId : visitorId;
+        String identityFilter;
+        Object[] identityArgs;
+        if (userId != null && visitorId != null) {
+            identityFilter = "(user_id = ? or visitor_id = ?)";
+            identityArgs = new Object[]{userId, visitorId};
+        } else {
+            identityFilter = userId != null ? "user_id = ?" : "visitor_id = ?";
+            identityArgs = new Object[]{userId != null ? userId : visitorId};
+        }
         return new HashSet<>(jdbc.query("""
             select distinct drama_id::text
             from playback_event
-            where %s = ?
+            where %s
               and created_at >= now() - interval '30 days'
-            """.formatted(identityColumn), (rs, row) -> rs.getString(1), identity));
+            """.formatted(identityFilter), (rs, row) -> rs.getString(1), identityArgs));
     }
 
     private static List<CatalogQueryService.HomeDrama> preferUnseen(
