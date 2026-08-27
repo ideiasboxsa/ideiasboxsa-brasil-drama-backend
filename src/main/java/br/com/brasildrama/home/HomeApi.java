@@ -121,18 +121,34 @@ class HomeController {
         Set<String> recentlyWatched
     ) {
         var ids = jdbc.query("""
+            with sessions as (
+                select drama_id, session_id,
+                       bool_or(event_type = 'play') played,
+                       bool_or(event_type = 'progress_75') reached_75,
+                       bool_or(event_type = 'completion') completed,
+                       bool_or(event_type = 'error') failed,
+                       max(created_at) last_activity
+                from playback_event
+                where created_at >= now() - interval '30 days'
+                group by drama_id, session_id
+            )
             select drama_id::text
-            from playback_event
-            where event_type = 'play'
-              and created_at >= now() - interval '30 days'
+            from sessions
             group by drama_id
-            order by count(distinct session_id) desc, max(created_at) desc
+            order by (
+                       count(*) filter (where played)
+                       + 2 * count(*) filter (where reached_75)
+                       + 4 * count(*) filter (where completed)
+                       - 2 * count(*) filter (where failed)
+                     ) desc,
+                     count(*) filter (where played) desc,
+                     max(last_activity) desc
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
         var ranked = diversifyGenres(preferUnseen(
             ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched
         ));
-        addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA", "Em alta nos últimos 30 dias"));
+        addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA", "Audiência, retenção e conclusão dos últimos 30 dias"));
     }
 
     private void addNewest(
