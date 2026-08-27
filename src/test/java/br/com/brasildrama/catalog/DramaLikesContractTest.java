@@ -34,4 +34,14 @@ class DramaLikesContractTest {
         mvc.perform(delete("/v1/catalog/dramas/{id}/likes", dramaId).header("X-Visitor-ID", visitor))
             .andExpect(status().isOk()).andExpect(jsonPath("$.liked").value(false)).andExpect(jsonPath("$.count").value(0));
     }
+
+    @Test
+    void rejectsInvalidAnonymousPrincipal() throws Exception {
+        UUID dramaId = UUID.randomUUID();
+        jdbc.update("insert into drama(id,title,synopsis,genre) values (?,?,?,?)", dramaId, "Invalid Visitor", "Synopsis", "Drama");
+
+        mvc.perform(put("/v1/catalog/dramas/{id}/likes", dramaId).header("X-Visitor-ID", "short"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+    }
 }
