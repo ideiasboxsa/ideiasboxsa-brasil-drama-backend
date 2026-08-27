@@ -45,7 +45,7 @@ rewards:
   zone-id: ${REWARDS_ZONE_ID:America/Sao_Paulo}
   welcome:
     enabled: ${REWARDS_WELCOME_ENABLED:true}
-    bonus: ${REWARDS_WELCOME_BONUS:50}
+    bonus: ${REWARDS_WELCOME_BONUS:100}
   ads:
     daily-limit: ${REWARDED_AD_DAILY_LIMIT:5}
     bonus: ${REWARDED_AD_BONUS:20}
