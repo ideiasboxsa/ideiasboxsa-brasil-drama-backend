@@ -42,9 +42,9 @@ class CatalogController {
     SearchResponseDto search(@RequestParam("q") String q, @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "0") int offset) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         int safeOffset = Math.max(0, offset);
-        var query = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
+        var query = normalize(q);
         var all = dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
-            .filter(d -> d.title.toLowerCase(Locale.ROOT).contains(query) || d.synopsis.toLowerCase(Locale.ROOT).contains(query) || d.genre.toLowerCase(Locale.ROOT).contains(query))
+            .filter(d -> normalize(d.title).contains(query) || normalize(d.synopsis).contains(query) || normalize(d.genre).contains(query))
             .map(this::summary).toList();
         int from = Math.min(safeOffset, all.size());
         int to = Math.min(from + safeLimit, all.size());
@@ -53,16 +53,28 @@ class CatalogController {
 
     @GetMapping("/categories")
     List<CategoryDto> categories() {
-        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream().map(d -> d.genre).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).distinct().sorted(String.CASE_INSENSITIVE_ORDER).map(name -> new CategoryDto(slug(name), name, 0)).toList();
+        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
+            .map(d -> d.genre)
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted(String.CASE_INSENSITIVE_ORDER)
+            .map(name -> new CategoryDto(slug(name), name, 0))
+            .toList();
     }
 
     @GetMapping("/categories/{slug}/dramas")
     List<DramaSummaryDto> byCategory(@PathVariable String slug) {
-        return dramas.findAllByOrderByTitleAsc().stream().filter(d -> slug(d.genre).equalsIgnoreCase(slug)).map(this::summary).toList();
+        return dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
+            .filter(d -> slug(d.genre).equalsIgnoreCase(slug))
+            .map(this::summary)
+            .toList();
     }
 
     private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, posterUrl(d), media.readUrl(d.backdropObjectKey)); }
     private String posterUrl(DramaEntity d) { return d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey); }
     private EpisodeDto episode(EpisodeEntity e) { return new EpisodeDto(e.id.toString(), e.number, e.title, e.description, e.durationSeconds, e.coinPrice, e.free, e.videoObjectKey == null || e.videoObjectKey.isBlank() ? e.videoUrl : media.readUrl(e.videoObjectKey)); }
-    private static String slug(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", ""); }
+    private static String normalize(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT); }
+    private static String slug(String value) { return normalize(value).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", ""); }
 }
