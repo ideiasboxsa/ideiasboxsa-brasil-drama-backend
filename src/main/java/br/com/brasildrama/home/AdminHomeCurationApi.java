@@ -63,6 +63,7 @@ class AdminHomeCurationApi {
             automaticSections,
             List.of(
                 "Preferências de gênero do usuário nos últimos 90 dias",
+                "Séries ainda não vistas recentemente têm prioridade",
                 "Reproduções únicas dos últimos 30 dias",
                 "Data de publicação do catálogo",
                 "Gêneros presentes nas séries publicadas"
