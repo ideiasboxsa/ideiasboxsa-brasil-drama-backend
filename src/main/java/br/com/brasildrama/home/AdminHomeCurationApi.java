@@ -65,6 +65,7 @@ class AdminHomeCurationApi {
                 "Identidade anônima sem nome, e-mail ou credencial",
                 "Preferências anônimas continuam após o login no mesmo aparelho",
                 "O usuário pode redefinir as recomendações a qualquer momento",
+                "Visitantes retomam episódios sem precisar criar conta",
                 "Séries ainda não vistas recentemente têm prioridade",
                 "Até três títulos do mesmo gênero antes de repetir a categoria",
                 "Trilhos de gênero exigem ao menos duas séries publicadas",
