@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 030-anonymous-discovery-identity
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: playback_event
+            columns:
+              - column:
+                  name: visitor_id
+                  type: varchar(64)
+        - createIndex:
+            tableName: playback_event
+            indexName: idx_playback_event_visitor_created
+            columns:
+              - column: { name: visitor_id }
+              - column: { name: created_at, descending: true }
