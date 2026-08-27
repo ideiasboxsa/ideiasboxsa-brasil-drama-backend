@@ -46,7 +46,7 @@ class AdminHomeCurationApi {
             .map(p -> p.dramaId).findFirst().orElseGet(() -> selected.isEmpty() ? null : selected.getFirst().dramaId());
 
         var curatedTypes = sections.stream().map(HomeCurationSection::type).collect(Collectors.toSet());
-        var automaticSections = discovery.home(null, null).sections().stream()
+        var automaticSections = discovery.home(null, null, null).sections().stream()
             .filter(section -> !curatedTypes.contains(section.type()))
             .map(section -> new HomeAutomationSection(
                 section.type(),
@@ -61,7 +61,8 @@ class AdminHomeCurationApi {
         var automation = new HomeAutomationView(
             automaticSections,
             List.of(
-                "Preferências de gênero do usuário nos últimos 90 dias",
+                "Preferências de gênero de usuários e visitantes nos últimos 90 dias",
+                "Identidade anônima sem nome, e-mail ou credencial",
                 "Séries ainda não vistas recentemente têm prioridade",
                 "Até três títulos do mesmo gênero antes de repetir a categoria",
                 "Trilhos de gênero exigem ao menos duas séries publicadas",
