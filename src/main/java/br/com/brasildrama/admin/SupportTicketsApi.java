@@ -107,25 +107,55 @@ public class SupportTicketsApi {
     }
 
     @GetMapping({"/v1/admin/support-tickets", "/v1/admin/users/support-tickets"})
-    List<SupportTicketDto> adminList(@RequestParam(required = false) String status) {
-        if (status == null || status.isBlank()) {
-            return jdbc.query("""
-                select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
-                join app_user u on u.id=t.user_id
-            left join admin_operator a on a.id=t.assigned_operator_id order by
-                case when t.status in ('OPEN','IN_PROGRESS') and t.response_due_at<now() then 0 else 1 end,
-                case t.priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
-                case t.status when 'OPEN' then 0 when 'IN_PROGRESS' then 1 when 'RESOLVED' then 2 else 3 end,
-                t.updated_at desc limit 200
-                """, this::map);
-        }
-        String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
-        if (!STATUSES.contains(normalizedStatus)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
-        return jdbc.query("""
+    List<SupportTicketDto> adminList(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String priority,
+        @RequestParam(required = false) Boolean assigned,
+        @RequestParam(required = false) String q
+    ) {
+        StringBuilder sql = new StringBuilder("""
             select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
             join app_user u on u.id=t.user_id
-            left join admin_operator a on a.id=t.assigned_operator_id where t.status=? order by t.updated_at desc limit 200
-            """, this::map, normalizedStatus);
+            left join admin_operator a on a.id=t.assigned_operator_id
+            where 1=1
+            """);
+        List<Object> args = new java.util.ArrayList<>();
+
+        if (status != null && !status.isBlank()) {
+            String value = status.trim().toUpperCase(Locale.ROOT);
+            if (!STATUSES.contains(value)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
+            sql.append(" and t.status=?");
+            args.add(value);
+        }
+        if (priority != null && !priority.isBlank()) {
+            String value = priority.trim().toUpperCase(Locale.ROOT);
+            if (!PRIORITIES.contains(value)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PRIORITY");
+            sql.append(" and t.priority=?");
+            args.add(value);
+        }
+        if (assigned != null) {
+            sql.append(assigned ? " and t.assigned_operator_id is not null" : " and t.assigned_operator_id is null");
+        }
+        if (q != null && !q.isBlank()) {
+            String term = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
+            sql.append("""
+                 and (lower(t.subject) like ? or lower(u.email) like ?
+                 or lower(coalesce(u.display_name,'')) like ? or lower(cast(t.id as text)) like ?)
+                """);
+            args.add(term);
+            args.add(term);
+            args.add(term);
+            args.add(term);
+        }
+
+        sql.append("""
+             order by
+            case when t.status in ('OPEN','IN_PROGRESS') and t.response_due_at<now() then 0 else 1 end,
+            case t.priority when 'URGENT' then 0 when 'HIGH' then 1 when 'NORMAL' then 2 else 3 end,
+            case t.status when 'OPEN' then 0 when 'IN_PROGRESS' then 1 when 'RESOLVED' then 2 else 3 end,
+            t.updated_at desc limit 200
+            """);
+        return jdbc.query(sql.toString(), this::map, args.toArray());
     }
 
     @PostMapping({"/v1/admin/support-tickets/{ticketId}/messages", "/v1/admin/users/support-tickets/{ticketId}/messages"})
