@@ -122,6 +122,7 @@ public class SupportTicketsApi {
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String priority,
         @RequestParam(required = false) Boolean assigned,
+        @RequestParam(required = false) UUID userId,
         @RequestParam(required = false) String waitingFor,
         @RequestParam(required = false) String q
     ) {
@@ -147,6 +148,10 @@ public class SupportTicketsApi {
         }
         if (assigned != null) {
             sql.append(assigned ? " and t.assigned_operator_id is not null" : " and t.assigned_operator_id is null");
+        }
+        if (userId != null) {
+            sql.append(" and t.user_id=?");
+            args.add(userId);
         }
         if (waitingFor != null && !waitingFor.isBlank()) {
             String value = waitingFor.trim().toUpperCase(Locale.ROOT);
