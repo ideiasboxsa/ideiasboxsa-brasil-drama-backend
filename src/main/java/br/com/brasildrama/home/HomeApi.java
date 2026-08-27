@@ -94,7 +94,8 @@ class HomeController {
             .filter(d -> !watched.contains(d.dramaId()))
             .limit(SECTION_LIMIT)
             .toList();
-        addIfNotEmpty(sections, section("FOR_YOU", "Escolhidos para você", recommendations, "PARA VOCÊ"));
+        var reason = "Porque você assiste " + String.join(", ", preferredGenres);
+        addIfNotEmpty(sections, section("FOR_YOU", "Escolhidos para você", recommendations, "PARA VOCÊ", reason));
     }
 
     private void addCurated(
@@ -133,7 +134,7 @@ class HomeController {
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
         var ranked = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
-        addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA"));
+        addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA", "Em alta nos últimos 30 dias"));
     }
 
     private void addNewest(
@@ -148,7 +149,7 @@ class HomeController {
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
         var newest = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
-        addIfNotEmpty(sections, section("NEW_RELEASES", "Novidades", newest, "NOVO"));
+        addIfNotEmpty(sections, section("NEW_RELEASES", "Novidades", newest, "NOVO", "Publicado recentemente"));
     }
 
     private void addGenres(
@@ -200,16 +201,30 @@ class HomeController {
         List<CatalogQueryService.HomeDrama> dramas,
         String badge
     ) {
-        return new HomeSectionDto(type, title, dramas.stream().map(d -> item(d, badge)).toList());
+        return section(type, title, dramas, badge, null);
+    }
+
+    private HomeSectionDto section(
+        String type,
+        String title,
+        List<CatalogQueryService.HomeDrama> dramas,
+        String badge,
+        String reason
+    ) {
+        return new HomeSectionDto(type, title, dramas.stream().map(d -> item(d, badge, reason)).toList());
     }
 
     private HomeItemDto item(CatalogQueryService.HomeDrama drama, String badge) {
+        return item(drama, badge, null);
+    }
+
+    private HomeItemDto item(CatalogQueryService.HomeDrama drama, String badge, String reason) {
         return new HomeItemDto(
             drama.dramaId(),
             drama.firstEpisodeId(),
             null,
             badge,
-            drama.genre(),
+            reason != null && !reason.isBlank() ? reason : drama.genre(),
             drama.coverUrl()
         );
     }
