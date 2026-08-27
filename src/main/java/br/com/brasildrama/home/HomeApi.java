@@ -30,8 +30,7 @@ class HomeController {
     @GetMapping("/v1/home")
     HomeResponseDto home(
         @RequestHeader(value = "Authorization", required = false) String authorization,
-        Authentication authentication,
-        Set<String> recentlyWatched
+        Authentication authentication
     ) {
         var catalogItems = catalog.homeDramas();
         if (catalogItems.isEmpty()) return new HomeResponseDto(null, List.of());
@@ -66,7 +65,8 @@ class HomeController {
     private void addPersonalized(
         List<HomeSectionDto> sections,
         Map<String, CatalogQueryService.HomeDrama> byId,
-        Authentication authentication
+        Authentication authentication,
+        Set<String> recentlyWatched
     ) {
         UUID userId = authenticatedUser(authentication);
         if (userId == null) return;
