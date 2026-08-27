@@ -36,6 +36,8 @@ class WelcomeBonusContractTest {
 
         JsonNode json = objectMapper.readTree(body);
         var token = json.get("accessToken").asText();
+        org.junit.jupiter.api.Assertions.assertTrue(json.get("welcomeBonusGranted").asBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals(100, json.get("welcomeBonusAmount").asLong());
 
         mvc.perform(get("/v1/rewards/overview").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
@@ -48,7 +50,10 @@ class WelcomeBonusContractTest {
                     """.formatted(email)))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString();
-        var secondToken = objectMapper.readTree(secondLogin).get("accessToken").asText();
+        JsonNode secondJson = objectMapper.readTree(secondLogin);
+        var secondToken = secondJson.get("accessToken").asText();
+        org.junit.jupiter.api.Assertions.assertFalse(secondJson.get("welcomeBonusGranted").asBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals(0, secondJson.get("welcomeBonusAmount").asLong());
 
         mvc.perform(get("/v1/rewards/overview").header("Authorization", "Bearer " + secondToken))
             .andExpect(status().isOk())
