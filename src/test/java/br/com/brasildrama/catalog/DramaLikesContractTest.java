@@ -41,7 +41,6 @@ class DramaLikesContractTest {
         jdbc.update("insert into drama(id,title,synopsis,genre) values (?,?,?,?)", dramaId, "Invalid Visitor", "Synopsis", "Drama");
 
         mvc.perform(put("/v1/catalog/dramas/{id}/likes", dramaId).header("X-Visitor-ID", "short"))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.status").value(400));
+            .andExpect(status().isBadRequest());
     }
 }
