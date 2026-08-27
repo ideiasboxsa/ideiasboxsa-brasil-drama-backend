@@ -52,9 +52,8 @@ class AdminHomeCurationApi {
                 section.type(),
                 section.title(),
                 section.items().stream()
-                    .map(homeItem -> byId.get(homeItem.dramaId()))
+                    .map(homeItem -> automationItem(homeItem, byId.get(homeItem.dramaId())))
                     .filter(Objects::nonNull)
-                    .map(this::item)
                     .toList()
             ))
             .filter(section -> !section.items().isEmpty())
@@ -124,6 +123,18 @@ class AdminHomeCurationApi {
         return List.of(new HomeSectionRequest("FOR_YOU", "Para você", request.dramaIds()));
     }
 
+    private HomeAutomationItem automationItem(HomeItemDto homeItem, CatalogQueryService.HomeDrama drama) {
+        if (drama == null) return null;
+        return new HomeAutomationItem(
+            UUID.fromString(drama.dramaId()),
+            drama.title(),
+            drama.genre(),
+            drama.coverUrl(),
+            homeItem.badge(),
+            homeItem.subtitle()
+        );
+    }
+
     private HomeCurationItem item(CatalogQueryService.HomeDrama drama) {
         return new HomeCurationItem(UUID.fromString(drama.dramaId()), drama.title(), drama.genre(), drama.coverUrl());
     }
@@ -133,7 +144,8 @@ class AdminHomeCurationApi {
                               @NotNull @Size(min = 1, max = 20) List<UUID> dramaIds) {}
     record HomeCurationItem(UUID dramaId, String title, String genre, String imageUrl) {}
     record HomeCurationSection(String type, String title, List<HomeCurationItem> items) {}
-    record HomeAutomationSection(String type, String title, List<HomeCurationItem> items) {}
+    record HomeAutomationItem(UUID dramaId, String title, String genre, String imageUrl, String badge, String reason) {}
+    record HomeAutomationSection(String type, String title, List<HomeAutomationItem> items) {}
     record HomeAutomationView(List<HomeAutomationSection> sections, List<String> signals) {}
     record HomeCurationView(UUID heroDramaId, List<HomeCurationSection> sections,
                             List<HomeCurationItem> selected, List<HomeCurationItem> available,
