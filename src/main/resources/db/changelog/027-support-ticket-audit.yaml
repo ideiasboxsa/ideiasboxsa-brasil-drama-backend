@@ -1,0 +1,48 @@
+databaseChangeLog:
+  - changeSet:
+      id: 027-support-ticket-audit
+      author: codex
+      context: base
+      changes:
+        - createTable:
+            tableName: support_ticket_audit
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: ticket_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_support_ticket_audit_ticket
+                    references: support_ticket(id)
+              - column:
+                  name: operator_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_support_ticket_audit_operator
+                    references: admin_operator(id)
+              - column:
+                  name: action
+                  type: varchar(40)
+                  constraints: { nullable: false }
+              - column:
+                  name: old_value
+                  type: varchar(160)
+              - column:
+                  name: new_value
+                  type: varchar(160)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+        - createIndex:
+            tableName: support_ticket_audit
+            indexName: idx_support_ticket_audit_ticket_created
+            columns:
+              - column: { name: ticket_id }
+              - column: { name: created_at }
