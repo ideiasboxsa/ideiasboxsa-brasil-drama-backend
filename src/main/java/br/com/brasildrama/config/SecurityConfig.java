@@ -25,7 +25,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                 .requestMatchers("/v1/auth/**", "/v1/catalog/**", "/v1/home", "/v1/monetization/catalog").permitAll()
-                .requestMatchers("/v1/analytics/playback/events").permitAll()
+                .requestMatchers("/v1/analytics/playback/events", "/v1/analytics/playback/visitor", "/v1/continue-watching").permitAll()
                 .requestMatchers("/v1/rewards/ads/ssv").permitAll()
                 .requestMatchers("/v1/admin/auth/**").permitAll()
                 .requestMatchers("/v1/admin/**").hasRole("ADMIN")
