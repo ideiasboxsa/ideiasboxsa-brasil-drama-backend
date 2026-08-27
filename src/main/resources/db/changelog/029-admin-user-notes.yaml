@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 029-admin-user-notes
+      author: codex
+      context: base
+      changes:
+        - createTable:
+            tableName: admin_user_note
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints: { primaryKey: true, nullable: false }
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_admin_user_note_user
+                    references: app_user(id)
+              - column:
+                  name: operator_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_admin_user_note_operator
+                    references: admin_operator(id)
+              - column:
+                  name: note
+                  type: varchar(2000)
+                  constraints: { nullable: false }
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints: { nullable: false }
+        - createIndex:
+            tableName: admin_user_note
+            indexName: idx_admin_user_note_user_created
+            columns:
+              - column: { name: user_id }
+              - column: { name: created_at }
