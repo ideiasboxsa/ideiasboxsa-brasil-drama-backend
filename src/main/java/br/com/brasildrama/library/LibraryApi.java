@@ -189,3 +189,63 @@ class LibraryController {
         return rs.wasNull() ? null : value;
     }
 }
+
+@RestController
+class VisitorLibraryController {
+    private final JdbcTemplate jdbc;
+
+    VisitorLibraryController(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @GetMapping("/v1/continue-watching")
+    ContinueWatchingResponseDto continueWatching(@RequestHeader("X-Visitor-Id") String visitorId) {
+        String normalized = normalizeVisitor(visitorId);
+        var items = jdbc.query("""
+            with latest as (
+                select distinct on (p.drama_id)
+                       p.drama_id, p.episode_id, p.position_ms, p.duration_ms, p.created_at
+                  from playback_event p
+                 where p.visitor_id = ?
+                   and p.event_type in ('play', 'pause', 'progress_25', 'progress_50', 'progress_75')
+                 order by p.drama_id, p.created_at desc
+            )
+            select l.drama_id, d.title drama_title, d.synopsis drama_synopsis, d.genre drama_genre,
+                   l.episode_id, e.number episode_number, e.title episode_title,
+                   l.position_ms, l.duration_ms, l.created_at updated_at
+              from latest l
+              join drama d on d.id = l.drama_id
+              join episode e on e.id = l.episode_id
+             where l.duration_ms is null or l.duration_ms = 0 or l.position_ms < l.duration_ms * 0.95
+             order by l.created_at desc
+             limit 20
+            """,
+            (rs, row) -> new ContinueWatchingItemDto(
+                rs.getObject("drama_id", UUID.class).toString(),
+                rs.getString("drama_title"),
+                rs.getString("drama_synopsis"),
+                rs.getString("drama_genre"),
+                rs.getObject("episode_id", UUID.class).toString(),
+                rs.getInt("episode_number"),
+                rs.getString("episode_title"),
+                rs.getLong("position_ms"),
+                nullableLongValue(rs, "duration_ms"),
+                rs.getObject("updated_at", OffsetDateTime.class).toString()
+            ),
+            normalized
+        );
+        return new ContinueWatchingResponseDto(items);
+    }
+
+    private static String normalizeVisitor(String value) {
+        if (value == null || !value.trim().matches("[A-Za-z0-9_-]{16,64}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid visitor identity");
+        }
+        return value.trim();
+    }
+
+    private static Long nullableLongValue(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
+    }
+}
