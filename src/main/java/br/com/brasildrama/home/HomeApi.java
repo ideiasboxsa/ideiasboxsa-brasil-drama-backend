@@ -30,6 +30,7 @@ class HomeController {
     @GetMapping("/v1/home")
     HomeResponseDto home(
         @RequestHeader(value = "Authorization", required = false) String authorization,
+        @RequestHeader(value = "X-Visitor-Id", required = false) String visitorId,
         Authentication authentication
     ) {
         var catalogItems = catalog.homeDramas();
@@ -43,8 +44,9 @@ class HomeController {
         ));
         var sections = new ArrayList<HomeSectionDto>();
 
-        var recentlyWatched = recentlyWatched(authentication);
-        addPersonalized(sections, byId, authentication, recentlyWatched);
+        var anonymousVisitor = anonymousVisitor(visitorId);
+        var recentlyWatched = recentlyWatched(authentication, anonymousVisitor);
+        addPersonalized(sections, byId, authentication, anonymousVisitor, recentlyWatched);
         addCurated(sections, byId);
         addRanked(sections, byId, recentlyWatched);
         addNewest(sections, byId, recentlyWatched);
@@ -66,22 +68,25 @@ class HomeController {
         List<HomeSectionDto> sections,
         Map<String, CatalogQueryService.HomeDrama> byId,
         Authentication authentication,
+        String visitorId,
         Set<String> recentlyWatched
     ) {
         UUID userId = authenticatedUser(authentication);
-        if (userId == null) return;
+        if (userId == null && visitorId == null) return;
 
+        String identityColumn = userId != null ? "p.user_id" : "p.visitor_id";
+        Object identity = userId != null ? userId : visitorId;
         var preferredGenres = jdbc.query("""
             select d.genre
             from playback_event p
             join drama d on d.id = p.drama_id
-            where p.user_id = ?
+            where %s = ?
               and p.event_type = 'play'
               and p.created_at >= now() - interval '90 days'
             group by d.genre
             order by count(distinct p.session_id) desc, d.genre
             limit 3
-            """, (rs, row) -> rs.getString(1), userId);
+            """.formatted(identityColumn), (rs, row) -> rs.getString(1), identity);
 
         if (preferredGenres.isEmpty()) return;
         var recommendations = byId.values().stream()
@@ -275,15 +280,17 @@ class HomeController {
         return diverse.stream().limit(SECTION_LIMIT).toList();
     }
 
-    private Set<String> recentlyWatched(Authentication authentication) {
+    private Set<String> recentlyWatched(Authentication authentication, String visitorId) {
         UUID userId = authenticatedUser(authentication);
-        if (userId == null) return Set.of();
+        if (userId == null && visitorId == null) return Set.of();
+        String identityColumn = userId != null ? "user_id" : "visitor_id";
+        Object identity = userId != null ? userId : visitorId;
         return new HashSet<>(jdbc.query("""
             select distinct drama_id::text
             from playback_event
-            where user_id = ?
+            where %s = ?
               and created_at >= now() - interval '30 days'
-            """, (rs, row) -> rs.getString(1), userId));
+            """.formatted(identityColumn), (rs, row) -> rs.getString(1), identity));
     }
 
     private static List<CatalogQueryService.HomeDrama> preferUnseen(
@@ -296,6 +303,12 @@ class HomeController {
         var prioritized = new ArrayList<CatalogQueryService.HomeDrama>(unseen);
         dramas.stream().filter(d -> recentlyWatched.contains(d.dramaId())).forEach(prioritized::add);
         return prioritized;
+    }
+
+    private static String anonymousVisitor(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim();
+        return normalized.matches("[A-Za-z0-9_-]{16,64}") ? normalized : null;
     }
 
     private static UUID authenticatedUser(Authentication authentication) {
