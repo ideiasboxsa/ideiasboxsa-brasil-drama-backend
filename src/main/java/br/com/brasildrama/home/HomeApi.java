@@ -129,7 +129,9 @@ class HomeController {
             order by count(distinct session_id) desc, max(created_at) desc
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
-        var ranked = preferUnseen(ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched);
+        var ranked = diversifyGenres(preferUnseen(
+            ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched
+        ));
         addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA", "Em alta nos últimos 30 dias"));
     }
 
@@ -145,7 +147,9 @@ class HomeController {
             order by created_at desc, title
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
-        var newest = preferUnseen(ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched);
+        var newest = diversifyGenres(preferUnseen(
+            ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched
+        ));
         addIfNotEmpty(sections, section("NEW_RELEASES", "Novidades", newest, "NOVO", "Publicado recentemente"));
     }
 
@@ -162,6 +166,7 @@ class HomeController {
                 Collectors.toList()
             ))
             .entrySet().stream()
+            .filter(entry -> entry.getValue().size() >= 2)
             .sorted(Comparator
                 .<Map.Entry<String, List<CatalogQueryService.HomeDrama>>>comparingInt(e -> e.getValue().size())
                 .reversed()
@@ -231,6 +236,27 @@ class HomeController {
         if (!section.items().isEmpty() && sections.stream().noneMatch(s -> s.type().equals(section.type()))) {
             sections.add(section);
         }
+    }
+
+    private static List<CatalogQueryService.HomeDrama> diversifyGenres(
+        List<CatalogQueryService.HomeDrama> dramas
+    ) {
+        if (dramas.size() <= 4) return dramas;
+        var genreCounts = new HashMap<String, Integer>();
+        var diverse = new ArrayList<CatalogQueryService.HomeDrama>();
+        var overflow = new ArrayList<CatalogQueryService.HomeDrama>();
+        for (var drama : dramas) {
+            var genre = drama.genre() == null ? "" : drama.genre().trim().toLowerCase(Locale.ROOT);
+            int count = genreCounts.getOrDefault(genre, 0);
+            if (count < 3) {
+                diverse.add(drama);
+                genreCounts.put(genre, count + 1);
+            } else {
+                overflow.add(drama);
+            }
+        }
+        overflow.stream().limit(Math.max(0, SECTION_LIMIT - diverse.size())).forEach(diverse::add);
+        return diverse.stream().limit(SECTION_LIMIT).toList();
     }
 
     private Set<String> recentlyWatched(Authentication authentication) {
