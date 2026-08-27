@@ -24,10 +24,10 @@ public class RewardGrantService {
     }
 
     @Transactional
-    public void grantWelcomeBonus(UUID userId) {
-        if (!welcomeEnabled || welcomeBonus <= 0) return;
+    public long grantWelcomeBonus(UUID userId) {
+        if (!welcomeEnabled || welcomeBonus <= 0) return 0L;
         var operationKey = "welcome:" + userId;
-        jdbc.update(
+        int inserted = jdbc.update(
             """
             insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at)
             values (?,?,?,?,?,?,?,now())
@@ -35,5 +35,6 @@ public class RewardGrantService {
             """,
             UUID.randomUUID(), userId, "BONUS", operationKey, welcomeBonus, "WELCOME", userId.toString()
         );
+        return inserted > 0 ? welcomeBonus : 0L;
     }
 }
