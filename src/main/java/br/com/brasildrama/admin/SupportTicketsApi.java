@@ -20,14 +20,13 @@ record SupportTicketUpdateRequest(String status, String adminNote, String priori
 record SupportTicketMessageRequest(String message) {}
 record SupportTicketRatingRequest(Integer rating, String comment) {}
 record SupportTicketAssignmentRequest(Boolean assigned) {}
-record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}
+record SupportTicketMessageDto(UUID id, String sender, String message, OffsetDateTime createdAt) {}\nrecord SupportTicketAuditDto(UUID id, String action, String oldValue, String newValue, String operatorName, OffsetDateTime createdAt) {}
 record SupportTicketDto(
     UUID id, String code, UUID userId, String userEmail, String userDisplayName,
     String category, String subject, String message, String status, String adminNote,
     List<SupportTicketMessageDto> messages, Integer rating, String ratingComment, OffsetDateTime ratedAt,
     String priority, OffsetDateTime responseDueAt, boolean overdue,
-    UUID assignedOperatorId, String assignedOperatorName, OffsetDateTime assignedAt,
-    OffsetDateTime createdAt, OffsetDateTime updatedAt
+    UUID assignedOperatorId, String assignedOperatorName, OffsetDateTime assignedAt,\n    List<SupportTicketAuditDto> auditTrail, OffsetDateTime createdAt, OffsetDateTime updatedAt
 ) {}
 
 @RestController
@@ -161,9 +160,7 @@ public class SupportTicketsApi {
     @PostMapping({"/v1/admin/support-tickets/{ticketId}/messages", "/v1/admin/users/support-tickets/{ticketId}/messages"})
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
-    SupportTicketDto adminReply(@PathVariable UUID ticketId, @RequestBody SupportTicketMessageRequest request) {
-        requireTicket(ticketId);
-        addMessage(ticketId, "ADMIN", request);
+    SupportTicketDto adminReply(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketMessageRequest request) {\n        requireTicket(ticketId);\n        addMessage(ticketId, "ADMIN", request);\n        audit(ticketId, userId(authentication), "REPLY", null, null);
         jdbc.update("update support_ticket set status=case when status='OPEN' then 'IN_PROGRESS' else status end where id=?", ticketId);
         return find(ticketId);
     }
@@ -182,21 +179,25 @@ public class SupportTicketsApi {
         } else {
             changed = jdbc.update("update support_ticket set assigned_operator_id=null,assigned_at=null,updated_at=now() where id=?", ticketId);
         }
-        if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
-        return find(ticketId);
-    }
-
-    @PutMapping({"/v1/admin/support-tickets/{ticketId}", "/v1/admin/users/support-tickets/{ticketId}"})
+        if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");\n        audit(ticketId, userId(authentication), assigned ? "ASSIGNED" : "UNASSIGNED", null, null);\n        return find(ticketId);\n    }\n\n    @PutMapping({"/v1/admin/support-tickets/{ticketId}", "/v1/admin/users/support-tickets/{ticketId}"})
     @Transactional
-    SupportTicketDto update(@PathVariable UUID ticketId, @RequestBody SupportTicketUpdateRequest request) {
+    SupportTicketDto update(Authentication authentication, @PathVariable UUID ticketId, @RequestBody SupportTicketUpdateRequest request) {
         String status = normalized(request == null ? null : request.status(), 24, "status");
         if (!STATUSES.contains(status)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
         String note = request == null || request.adminNote() == null ? null : request.adminNote().trim();
         if (note != null && note.length() > 2000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADMIN_NOTE_TOO_LONG");
         String priority = request == null || request.priority() == null ? null : request.priority().trim().toUpperCase(Locale.ROOT);
         if (priority != null && !PRIORITIES.contains(priority)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PRIORITY");
+        List<java.util.Map<String, Object>> currentRows = jdbc.queryForList("select status,priority from support_ticket where id=?", ticketId);
+        if (currentRows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+        String oldStatus = String.valueOf(currentRows.getFirst().get("status"));
+        String oldPriority = String.valueOf(currentRows.getFirst().get("priority"));
         int changed = jdbc.update("update support_ticket set status=?,admin_note=?,priority=coalesce(?,priority),updated_at=now() where id=?", status, note, priority, ticketId);
         if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
+        UUID operatorId = userId(authentication);
+        if (!oldStatus.equals(status)) audit(ticketId, operatorId, "STATUS", oldStatus, status);
+        if (priority != null && !oldPriority.equals(priority)) audit(ticketId, operatorId, "PRIORITY", oldPriority, priority);
+        if (note != null) audit(ticketId, operatorId, "INTERNAL_NOTE", null, null);
         return find(ticketId);
     }
 
@@ -205,6 +206,25 @@ public class SupportTicketsApi {
         jdbc.update("insert into support_ticket_message(id,ticket_id,sender,message,created_at) values(?,?,?,?,now())",
             UUID.randomUUID(), ticketId, sender, message);
         jdbc.update("update support_ticket set updated_at=now() where id=?", ticketId);
+    }
+
+    private void audit(UUID ticketId, UUID operatorId, String action, String oldValue, String newValue) {
+        jdbc.update("""
+            insert into support_ticket_audit(id,ticket_id,operator_id,action,old_value,new_value,created_at)
+            values(?,?,?,?,?,?,now())
+            """, UUID.randomUUID(), ticketId, operatorId, action, oldValue, newValue);
+    }
+
+    private List<SupportTicketAuditDto> auditTrail(UUID ticketId) {
+        return jdbc.query("""
+            select h.id,h.action,h.old_value,h.new_value,a.display_name as operator_name,h.created_at
+            from support_ticket_audit h join admin_operator a on a.id=h.operator_id
+            where h.ticket_id=? order by h.created_at desc,h.id desc limit 100
+            """, (rs, row) -> new SupportTicketAuditDto(
+                rs.getObject("id", UUID.class), rs.getString("action"), rs.getString("old_value"),
+                rs.getString("new_value"), rs.getString("operator_name"),
+                rs.getObject("created_at", OffsetDateTime.class)
+            ), ticketId);
     }
 
     private void requireOwnedOpenTicket(UUID ticketId, UUID userId) {
@@ -251,8 +271,7 @@ public class SupportTicketsApi {
             status, rs.getString("admin_note"), messages(id),
             (Integer) rs.getObject("rating"), rs.getString("rating_comment"), rs.getObject("rated_at", OffsetDateTime.class),
             rs.getString("priority"), responseDueAt, overdue,
-            rs.getObject("assigned_operator_id", UUID.class), rs.getString("assigned_operator_name"), rs.getObject("assigned_at", OffsetDateTime.class),
-            rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
+            rs.getObject("assigned_operator_id", UUID.class), rs.getString("assigned_operator_name"), rs.getObject("assigned_at", OffsetDateTime.class),\n            auditTrail(id), rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
         );
     }
 
