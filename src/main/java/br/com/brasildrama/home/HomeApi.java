@@ -30,7 +30,8 @@ class HomeController {
     @GetMapping("/v1/home")
     HomeResponseDto home(
         @RequestHeader(value = "Authorization", required = false) String authorization,
-        Authentication authentication
+        Authentication authentication,
+        Set<String> recentlyWatched
     ) {
         var catalogItems = catalog.homeDramas();
         if (catalogItems.isEmpty()) return new HomeResponseDto(null, List.of());
@@ -43,11 +44,12 @@ class HomeController {
         ));
         var sections = new ArrayList<HomeSectionDto>();
 
-        addPersonalized(sections, byId, authentication);
+        var recentlyWatched = recentlyWatched(authentication);
+        addPersonalized(sections, byId, authentication, recentlyWatched);
         addCurated(sections, byId);
-        addRanked(sections, byId);
-        addNewest(sections, byId);
-        addGenres(sections, catalogItems);
+        addRanked(sections, byId, recentlyWatched);
+        addNewest(sections, byId, recentlyWatched);
+        addGenres(sections, catalogItems, recentlyWatched);
 
         if (sections.isEmpty()) {
             sections.add(section("DISCOVER", "Descubra novos dramas", catalogItems, null));
@@ -82,16 +84,9 @@ class HomeController {
             """, (rs, row) -> rs.getString(1), userId);
 
         if (preferredGenres.isEmpty()) return;
-        var watched = new HashSet<>(jdbc.query("""
-            select distinct drama_id::text
-            from playback_event
-            where user_id = ?
-              and created_at >= now() - interval '30 days'
-            """, (rs, row) -> rs.getString(1), userId));
-
         var recommendations = byId.values().stream()
             .filter(d -> preferredGenres.stream().anyMatch(g -> g.equalsIgnoreCase(d.genre())))
-            .filter(d -> !watched.contains(d.dramaId()))
+            .filter(d -> !recentlyWatched.contains(d.dramaId()))
             .limit(SECTION_LIMIT)
             .toList();
         var reason = "Porque você assiste " + String.join(", ", preferredGenres);
@@ -122,7 +117,8 @@ class HomeController {
 
     private void addRanked(
         List<HomeSectionDto> sections,
-        Map<String, CatalogQueryService.HomeDrama> byId
+        Map<String, CatalogQueryService.HomeDrama> byId,
+        Set<String> recentlyWatched
     ) {
         var ids = jdbc.query("""
             select drama_id::text
@@ -133,13 +129,14 @@ class HomeController {
             order by count(distinct session_id) desc, max(created_at) desc
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
-        var ranked = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+        var ranked = preferUnseen(ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched);
         addIfNotEmpty(sections, section("MOST_WATCHED", "Mais assistidos", ranked, "EM ALTA", "Em alta nos últimos 30 dias"));
     }
 
     private void addNewest(
         List<HomeSectionDto> sections,
-        Map<String, CatalogQueryService.HomeDrama> byId
+        Map<String, CatalogQueryService.HomeDrama> byId,
+        Set<String> recentlyWatched
     ) {
         var ids = jdbc.query("""
             select id::text
@@ -148,13 +145,14 @@ class HomeController {
             order by created_at desc, title
             limit ?
             """, (rs, row) -> rs.getString(1), SECTION_LIMIT);
-        var newest = ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+        var newest = preferUnseen(ids.stream().map(byId::get).filter(Objects::nonNull).toList(), recentlyWatched);
         addIfNotEmpty(sections, section("NEW_RELEASES", "Novidades", newest, "NOVO", "Publicado recentemente"));
     }
 
     private void addGenres(
         List<HomeSectionDto> sections,
-        List<CatalogQueryService.HomeDrama> catalogItems
+        List<CatalogQueryService.HomeDrama> catalogItems,
+        Set<String> recentlyWatched
     ) {
         catalogItems.stream()
             .filter(d -> d.genre() != null && !d.genre().isBlank())
@@ -174,7 +172,7 @@ class HomeController {
                 section(
                     "GENRE_" + slug(entry.getKey()),
                     entry.getKey(),
-                    entry.getValue().stream().limit(SECTION_LIMIT).toList(),
+                    preferUnseen(entry.getValue(), recentlyWatched).stream().limit(SECTION_LIMIT).toList(),
                     null
                 )
             ));
@@ -233,6 +231,29 @@ class HomeController {
         if (!section.items().isEmpty() && sections.stream().noneMatch(s -> s.type().equals(section.type()))) {
             sections.add(section);
         }
+    }
+
+    private Set<String> recentlyWatched(Authentication authentication) {
+        UUID userId = authenticatedUser(authentication);
+        if (userId == null) return Set.of();
+        return new HashSet<>(jdbc.query("""
+            select distinct drama_id::text
+            from playback_event
+            where user_id = ?
+              and created_at >= now() - interval '30 days'
+            """, (rs, row) -> rs.getString(1), userId));
+    }
+
+    private static List<CatalogQueryService.HomeDrama> preferUnseen(
+        List<CatalogQueryService.HomeDrama> dramas,
+        Set<String> recentlyWatched
+    ) {
+        if (recentlyWatched.isEmpty()) return dramas;
+        var unseen = dramas.stream().filter(d -> !recentlyWatched.contains(d.dramaId())).toList();
+        if (unseen.size() >= Math.min(4, dramas.size())) return unseen;
+        var prioritized = new ArrayList<CatalogQueryService.HomeDrama>(unseen);
+        dramas.stream().filter(d -> recentlyWatched.contains(d.dramaId())).forEach(prioritized::add);
+        return prioritized;
     }
 
     private static UUID authenticatedUser(Authentication authentication) {
