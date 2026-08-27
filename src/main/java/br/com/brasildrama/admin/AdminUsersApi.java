@@ -17,11 +17,13 @@ record AdminUserSummary(UUID id, String email, String displayName, OffsetDateTim
 record AdminUsersPage(List<AdminUserSummary> items, long total, int limit, int offset) {}
 record AdminUserNoteRequest(String note) {}
 record AdminUserNoteDto(UUID id, String note, UUID operatorId, String operatorName, OffsetDateTime createdAt) {}
+record AdminUserActivityDto(String type, String title, String detail, OffsetDateTime occurredAt) {}
 record AdminUserDetail(
     UUID id, String email, String displayName, OffsetDateTime createdAt,
     int coins, long bonus, long vipPoints, OffsetDateTime vipUntil,
     long favorites, long watching, long unlockedEpisodes, long purchases,
-    long missionsCompleted, long missionsClaimed, List<AdminUserNoteDto> notes
+    long missionsCompleted, long missionsClaimed, List<AdminUserNoteDto> notes,
+    List<AdminUserActivityDto> recentActivity
 ) {}
 
 @RestController
@@ -92,7 +94,8 @@ public class AdminUsersApi {
                 rs.getObject("created_at", OffsetDateTime.class), rs.getInt("coins"), rs.getLong("bonus"),
                 rs.getLong("vip_points"), rs.getObject("vip_until", OffsetDateTime.class),
                 rs.getLong("favorites"), rs.getLong("watching"), rs.getLong("unlocked_episodes"),
-                rs.getLong("purchases"), rs.getLong("missions_completed"), rs.getLong("missions_claimed"), notes(userId)
+                rs.getLong("purchases"), rs.getLong("missions_completed"), rs.getLong("missions_claimed"),
+                notes(userId), recentActivity(userId)
             ), userId);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND");
         return rows.getFirst();
@@ -111,6 +114,37 @@ public class AdminUsersApi {
         jdbc.update("insert into admin_user_note(id,user_id,operator_id,note,created_at) values(?,?,?,?,now())",
             id, userId, operatorId(authentication), note);
         return notes(userId).stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
+    }
+
+    private List<AdminUserActivityDto> recentActivity(UUID userId) {
+        return jdbc.query("""
+            select type,title,detail,occurred_at from (
+              select 'PLAYBACK' type,d.title,
+                     'Episódio '||e.number||' · '||e.title detail,h.updated_at occurred_at
+              from playback_history h join drama d on d.id=h.drama_id join episode e on e.id=h.episode_id
+              where h.user_id=?
+              union all
+              select 'REWARD',r.ledger_type,
+                     coalesce(r.reference_type,'Movimentação')||' · '||
+                     case when r.amount>=0 then '+' else '' end||r.amount,r.created_at
+              from reward_ledger r where r.user_id=?
+              union all
+              select 'WALLET',w.entry_type,
+                     coalesce(w.reference_type,'Movimentação')||' · '||
+                     case when w.amount>=0 then '+' else '' end||w.amount,w.created_at
+              from wallet_ledger w where w.user_id=?
+              union all
+              select 'PURCHASE',p.product_id,
+                     p.product_type||case when p.acknowledged then ' · validada' else ' · pendente' end,p.created_at
+              from google_play_purchase p where p.user_id=?
+              union all
+              select 'SUPPORT',t.subject,t.status||' · '||t.category,t.updated_at
+              from support_ticket t where t.user_id=?
+            ) activity order by occurred_at desc limit 40
+            """, (rs, row) -> new AdminUserActivityDto(
+                rs.getString("type"), rs.getString("title"), rs.getString("detail"),
+                rs.getObject("occurred_at", OffsetDateTime.class)
+            ), userId, userId, userId, userId, userId);
     }
 
     private List<AdminUserNoteDto> notes(UUID userId) {
