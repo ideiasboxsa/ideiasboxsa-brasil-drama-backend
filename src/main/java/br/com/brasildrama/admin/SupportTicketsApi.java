@@ -31,7 +31,7 @@ record SupportTicketDto(
 ) {}
 
 @RestController
-class SupportTicketsApi {
+public class SupportTicketsApi {
     private static final Set<String> CATEGORIES = Set.of("ACCOUNT", "PAYMENT", "PLAYBACK", "REWARDS", "OTHER");
     private static final Set<String> STATUSES = Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED");
     private static final Set<String> PRIORITIES = Set.of("LOW", "NORMAL", "HIGH", "URGENT");
@@ -68,7 +68,7 @@ class SupportTicketsApi {
     @GetMapping("/v1/me/support-tickets")
     List<SupportTicketDto> mine(Authentication authentication) {
         return jdbc.query("""
-            select t.*,u.email,u.display_name from support_ticket t
+            select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
             join app_user u on u.id=t.user_id
             left join admin_operator a on a.id=t.assigned_operator_id
             where t.user_id=? order by t.updated_at desc limit 20
@@ -110,7 +110,7 @@ class SupportTicketsApi {
     List<SupportTicketDto> adminList(@RequestParam(required = false) String status) {
         if (status == null || status.isBlank()) {
             return jdbc.query("""
-                select t.*,u.email,u.display_name from support_ticket t
+                select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
                 join app_user u on u.id=t.user_id
             left join admin_operator a on a.id=t.assigned_operator_id order by
                 case when t.status in ('OPEN','IN_PROGRESS') and t.response_due_at<now() then 0 else 1 end,
@@ -122,7 +122,7 @@ class SupportTicketsApi {
         String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
         if (!STATUSES.contains(normalizedStatus)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
         return jdbc.query("""
-            select t.*,u.email,u.display_name from support_ticket t
+            select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
             join app_user u on u.id=t.user_id
             left join admin_operator a on a.id=t.assigned_operator_id where t.status=? order by t.updated_at desc limit 200
             """, this::map, normalizedStatus);
@@ -191,7 +191,7 @@ class SupportTicketsApi {
 
     private SupportTicketDto find(UUID id) {
         List<SupportTicketDto> rows = jdbc.query("""
-            select t.*,u.email,u.display_name from support_ticket t
+            select t.*,u.email,u.display_name,a.display_name as assigned_operator_name from support_ticket t
             join app_user u on u.id=t.user_id
             left join admin_operator a on a.id=t.assigned_operator_id where t.id=?
             """, this::map, id);
