@@ -188,16 +188,15 @@ public class SupportTicketsApi {
         if (note != null && note.length() > 2000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ADMIN_NOTE_TOO_LONG");
         String priority = request == null || request.priority() == null ? null : request.priority().trim().toUpperCase(Locale.ROOT);
         if (priority != null && !PRIORITIES.contains(priority)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_PRIORITY");
-        List<java.util.Map<String, Object>> currentRows = jdbc.queryForList("select status,priority from support_ticket where id=?", ticketId);
+        List<java.util.Map<String, Object>> currentRows = jdbc.queryForList("select status,priority,admin_note from support_ticket where id=?", ticketId);
         if (currentRows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
         String oldStatus = String.valueOf(currentRows.getFirst().get("status"));
-        String oldPriority = String.valueOf(currentRows.getFirst().get("priority"));
-        int changed = jdbc.update("update support_ticket set status=?,admin_note=?,priority=coalesce(?,priority),updated_at=now() where id=?", status, note, priority, ticketId);
+        String oldPriority = String.valueOf(currentRows.getFirst().get("priority"));\n        String oldNote = (String) currentRows.getFirst().get("admin_note");\n        int changed = jdbc.update("update support_ticket set status=?,admin_note=?,priority=coalesce(?,priority),updated_at=now() where id=?", status, note, priority, ticketId);
         if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND");
         UUID operatorId = userId(authentication);
         if (!oldStatus.equals(status)) audit(ticketId, operatorId, "STATUS", oldStatus, status);
         if (priority != null && !oldPriority.equals(priority)) audit(ticketId, operatorId, "PRIORITY", oldPriority, priority);
-        if (note != null) audit(ticketId, operatorId, "INTERNAL_NOTE", null, null);
+        if (!java.util.Objects.equals(oldNote, note)) audit(ticketId, operatorId, "INTERNAL_NOTE", null, null);
         return find(ticketId);
     }
 
