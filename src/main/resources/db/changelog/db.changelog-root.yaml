@@ -43,3 +43,5 @@ databaseChangeLog:
       file: db/changelog/025-support-ticket-sla.yaml
   - include:
       file: db/changelog/026-support-ticket-assignment.yaml
+  - include:
+      file: db/changelog/027-support-ticket-audit.yaml
