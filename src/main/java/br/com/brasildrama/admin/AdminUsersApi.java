@@ -2,6 +2,8 @@ package br.com.brasildrama.admin;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -13,15 +15,17 @@ import java.util.UUID;
 
 record AdminUserSummary(UUID id, String email, String displayName, OffsetDateTime createdAt, int coins, long bonus, long vipPoints, OffsetDateTime vipUntil) {}
 record AdminUsersPage(List<AdminUserSummary> items, long total, int limit, int offset) {}
+record AdminUserNoteRequest(String note) {}
+record AdminUserNoteDto(UUID id, String note, UUID operatorId, String operatorName, OffsetDateTime createdAt) {}
 record AdminUserDetail(
     UUID id, String email, String displayName, OffsetDateTime createdAt,
     int coins, long bonus, long vipPoints, OffsetDateTime vipUntil,
     long favorites, long watching, long unlockedEpisodes, long purchases,
-    long missionsCompleted, long missionsClaimed
+    long missionsCompleted, long missionsClaimed, List<AdminUserNoteDto> notes
 ) {}
 
 @RestController
-class AdminUsersApi {
+public class AdminUsersApi {
     private final JdbcTemplate jdbc;
 
     AdminUsersApi(JdbcTemplate jdbc) {
@@ -88,10 +92,45 @@ class AdminUsersApi {
                 rs.getObject("created_at", OffsetDateTime.class), rs.getInt("coins"), rs.getLong("bonus"),
                 rs.getLong("vip_points"), rs.getObject("vip_until", OffsetDateTime.class),
                 rs.getLong("favorites"), rs.getLong("watching"), rs.getLong("unlocked_episodes"),
-                rs.getLong("purchases"), rs.getLong("missions_completed"), rs.getLong("missions_claimed")
+                rs.getLong("purchases"), rs.getLong("missions_completed"), rs.getLong("missions_claimed"), notes(userId)
             ), userId);
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND");
         return rows.getFirst();
+    }
+
+    @PostMapping("/v1/admin/users/{userId}/notes")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
+    AdminUserNoteDto addNote(Authentication authentication, @PathVariable UUID userId, @RequestBody AdminUserNoteRequest request) {
+        String note = request == null || request.note() == null ? "" : request.note().trim();
+        if (note.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "NOTE_REQUIRED");
+        if (note.length() > 2000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "NOTE_TOO_LONG");
+        Integer userExists = jdbc.queryForObject("select count(*) from app_user where id=?", Integer.class, userId);
+        if (userExists == null || userExists == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND");
+        UUID id = UUID.randomUUID();
+        jdbc.update("insert into admin_user_note(id,user_id,operator_id,note,created_at) values(?,?,?,?,now())",
+            id, userId, operatorId(authentication), note);
+        return notes(userId).stream().filter(item -> item.id().equals(id)).findFirst().orElseThrow();
+    }
+
+    private List<AdminUserNoteDto> notes(UUID userId) {
+        return jdbc.query("""
+            select n.id,n.note,n.operator_id,a.display_name as operator_name,n.created_at
+            from admin_user_note n join admin_operator a on a.id=n.operator_id
+            where n.user_id=? order by n.created_at desc,n.id desc limit 50
+            """, (rs, row) -> new AdminUserNoteDto(
+                rs.getObject("id", UUID.class), rs.getString("note"),
+                rs.getObject("operator_id", UUID.class), rs.getString("operator_name"),
+                rs.getObject("created_at", OffsetDateTime.class)
+            ), userId);
+    }
+
+    private static UUID operatorId(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        try { return UUID.fromString(authentication.getName()); }
+        catch (IllegalArgumentException ex) { throw new ResponseStatusException(HttpStatus.UNAUTHORIZED); }
     }
 
     private AdminUserSummary summary(ResultSet rs, int row) throws SQLException {
