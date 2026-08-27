@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasItem;
@@ -48,5 +47,14 @@ class PublicCatalogContractTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].slug").exists())
             .andExpect(jsonPath("$[0].name").exists());
+    }
+
+    @Test
+    void categoryDramaListingIsPublicAndReturnsPublishedCatalogShape() throws Exception {
+        mvc.perform(get("/v1/catalog/categories/drama/dramas"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").isNotEmpty())
+            .andExpect(jsonPath("$[0].title").isNotEmpty())
+            .andExpect(jsonPath("$[0].genre").value("Drama"));
     }
 }
