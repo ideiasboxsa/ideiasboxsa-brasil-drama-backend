@@ -18,7 +18,7 @@ record GoogleAuthRequest(@NotBlank String idToken) {}
 record PasswordForgotRequest(@Email @NotBlank String email) {}
 record PasswordResetRequest(@NotBlank String token, @NotBlank @Size(min = 8, max = 100) String newPassword) {}
 record UserDto(String id, String email, String displayName) {}
-record LoginResponse(String accessToken, String expiresAt, UserDto user) {}
+record LoginResponse(String accessToken, String expiresAt, UserDto user, boolean welcomeBonusGranted, long welcomeBonusAmount) {}
 record ProfileDto(String id, String email, String displayName) {}
 record ProfileUpdateRequest(@NotBlank @Size(min = 2, max = 120) String displayName) {}
 record PlaybackPreferencesDto(boolean autoplay, boolean allowMobileData) {}
@@ -46,8 +46,8 @@ public class AuthApi {
         if (users.existsByEmailIgnoreCase(email)) throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         var user = new UserAccount(UUID.randomUUID(), email, request.displayName().trim(), passwords.encode(request.password()));
         users.saveAndFlush(user);
-        rewardGrants.grantWelcomeBonus(user.id);
-        return response(user);
+        long welcomeBonus = rewardGrants.grantWelcomeBonus(user.id);
+        return response(user, welcomeBonus);
     }
 
     @PostMapping("/v1/auth/login")
@@ -56,8 +56,8 @@ public class AuthApi {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
         if (user.passwordHash == null || !passwords.matches(request.password(), user.passwordHash))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
-        rewardGrants.grantWelcomeBonus(user.id);
-        return response(user);
+        long welcomeBonus = rewardGrants.grantWelcomeBonus(user.id);
+        return response(user, welcomeBonus);
     }
 
     @PostMapping("/v1/auth/google")
@@ -112,9 +112,15 @@ public class AuthApi {
         return users.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
 
-    private LoginResponse response(UserAccount user) {
+    private LoginResponse response(UserAccount user, long welcomeBonus) {
         var issued = jwt.issue(user.id);
-        return new LoginResponse(issued.value(), issued.expiresAt().toString(), new UserDto(user.id.toString(), user.email, user.displayName));
+        return new LoginResponse(
+            issued.value(),
+            issued.expiresAt().toString(),
+            new UserDto(user.id.toString(), user.email, user.displayName),
+            welcomeBonus > 0,
+            welcomeBonus
+        );
     }
 
     private ProfileDto profile(UserAccount user) {
