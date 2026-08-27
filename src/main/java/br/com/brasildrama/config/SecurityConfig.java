@@ -23,7 +23,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                 .requestMatchers("/v1/auth/**", "/v1/catalog/**", "/v1/home", "/v1/monetization/catalog").permitAll()
                 .requestMatchers("/v1/analytics/playback/events").permitAll()
                 .requestMatchers("/v1/rewards/ads/ssv").permitAll()
