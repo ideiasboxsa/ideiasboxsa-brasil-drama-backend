@@ -81,8 +81,7 @@ class LibraryController {
                 rs.getObject("episode_id", UUID.class).toString(),
                 rs.getLong("position_ms"),
                 nullableLong(rs, "duration_ms"),
-                rs.getObject("updated_at", OffsetDateTime.class).toString(),
-                rs.getString("cover_url")
+                rs.getObject("updated_at", OffsetDateTime.class).toString()
             ),
             userId(authentication)
         );
