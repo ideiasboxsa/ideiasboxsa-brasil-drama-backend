@@ -51,8 +51,8 @@ class AdminAuditApi {
         var actorIds=raw.stream().map(log->log.actorOperatorId).filter(Objects::nonNull).collect(Collectors.toSet());
         if(actorIds.isEmpty())return ResponseEntity.ok(List.of());
         var result=operators.findAllById(actorIds).stream()
-            .sorted(Comparator.comparing(operator->operator.displayName==null?"":operator.displayName,String.CASE_INSENSITIVE_ORDER))
-            .map(operator->new ActorView(operator.id,operator.displayName,operator.email))
+            .sorted(Comparator.comparing(this::actorLabel,String.CASE_INSENSITIVE_ORDER))
+            .map(operator->new ActorView(operator.id,actorLabel(operator),operator.email))
             .toList();
         return ResponseEntity.ok(result);
     }
@@ -63,8 +63,9 @@ class AdminAuditApi {
         var raw=logs.findAllByOrderByCreatedAtDesc(PageRequest.of(0,100));
         var actorIds=raw.stream().map(log->log.actorOperatorId).filter(Objects::nonNull).collect(Collectors.toSet());
         var actors=actorIds.isEmpty()?Map.<UUID,AdminOperator>of():operators.findAllById(actorIds).stream().collect(Collectors.toMap(operator->operator.id,Function.identity()));
-        var result=raw.stream().filter(log->normalizedAction==null||normalizedAction.isBlank()||normalizedAction.equals(log.action)).filter(log->actorOperatorId==null||actorOperatorId.equals(log.actorOperatorId)).map(log->{var source=actors.get(log.actorOperatorId);return new AuditView(log.id,log.actorOperatorId,source==null?"Operador":source.displayName,source==null?null:source.email,log.action,log.entityType,log.entityId,log.summary,log.createdAt);}).toList();return ResponseEntity.ok(result);
+        var result=raw.stream().filter(log->normalizedAction==null||normalizedAction.isBlank()||normalizedAction.equals(log.action)).filter(log->actorOperatorId==null||actorOperatorId.equals(log.actorOperatorId)).map(log->{var source=actors.get(log.actorOperatorId);return new AuditView(log.id,log.actorOperatorId,source==null?"Operador":actorLabel(source),source==null?null:source.email,log.action,log.entityType,log.entityId,log.summary,log.createdAt);}).toList();return ResponseEntity.ok(result);
     }
+    private String actorLabel(AdminOperator operator){if(operator==null)return "Operador";if(operator.displayName!=null&&!operator.displayName.isBlank())return operator.displayName.trim();if(operator.email!=null&&!operator.email.isBlank())return operator.email.trim();return "Operador";}
     private AdminOperator currentSuperAdmin(Principal principal){if(principal==null)return null;try{return operators.findById(UUID.fromString(principal.getName())).filter(value->value.active&&value.role==AdminRole.SUPER_ADMIN).orElse(null);}catch(IllegalArgumentException ex){return null;}}
     record ActionView(String action,String label){}
     record ActorView(UUID id,String displayName,String email){}
