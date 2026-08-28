@@ -53,6 +53,30 @@ class PlaybackEntryContractTest {
     }
 
     @Test
+    void insecurePlaybackUrlsReturnConflict() {
+        for (String url : List.of(
+            "http://cdn.example.com/ep.mp4",
+            "https://user:secret@cdn.example.com/ep.mp4",
+            "https://cdn.example.com:8443/ep.mp4"
+        )) {
+            var dramas = mock(DramaRepository.class);
+            var episodes = mock(EpisodeRepository.class);
+            var media = mock(MediaStorageService.class);
+            var drama = drama(DramaStatus.PUBLISHED);
+            when(dramas.findById(drama.id)).thenReturn(Optional.of(drama));
+            when(episodes.findByDramaIdOrderByNumberAsc(drama.id)).thenReturn(List.of(episode(drama.id, 1, url)));
+
+            assertThatThrownBy(() -> new PlaybackEntryApi(dramas, episodes, media).playbackEntry(drama.id))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> {
+                    var response = (ResponseStatusException) error;
+                    assertThat(response.getStatusCode().value()).isEqualTo(409);
+                    assertThat(response.getReason()).isEqualTo("PLAYBACK_URL_UNAVAILABLE");
+                });
+        }
+    }
+
+    @Test
     void draftDramaCannotExposePlaybackEntry() {
         var dramas = mock(DramaRepository.class);
         var episodes = mock(EpisodeRepository.class);
