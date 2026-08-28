@@ -27,6 +27,8 @@ class GuestRewardsApi {
     @GetMapping("/guest-overview")
     GuestRewardsOverviewDto guestOverview(@RequestHeader(VisitorIdentity.HEADER) String rawVisitorId) {
         var visitor = VisitorIdentity.parse(rawVisitorId);
+        touch(visitor);
+
         var vipCatalog = jdbc.query(
             "select id,label,required_vip_points,vip_days,enabled from vip_redemption_option where enabled=true order by required_vip_points asc",
             (rs, row) -> new GuestVipRedemptionDto(
@@ -55,6 +57,17 @@ class GuestRewardsApi {
                     "brasildrama://account"
                 )
             )
+        );
+    }
+
+    private void touch(VisitorIdentity visitor) {
+        jdbc.update(
+            """
+            insert into visitor_identity(visitor_id,first_seen_at,last_seen_at)
+            values (?,now(),now())
+            on conflict (visitor_id) do update set last_seen_at=excluded.last_seen_at
+            """,
+            visitor.id()
         );
     }
 
