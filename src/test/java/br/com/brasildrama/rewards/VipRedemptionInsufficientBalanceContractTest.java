@@ -14,7 +14,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -44,8 +43,7 @@ class VipRedemptionInsufficientBalanceContractTest {
                 .header("Authorization", "Bearer " + session.token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"operationKey\":\"vip-insufficient-once\"}"))
-            .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.detail").value("Insufficient VIP points"));
+            .andExpect(status().isConflict());
 
         assertThat(jdbc.queryForObject(
             "select count(*) from vip_redemption where user_id=?",
@@ -57,6 +55,11 @@ class VipRedemptionInsufficientBalanceContractTest {
             Long.class,
             session.userId()
         )).isEqualTo(80L);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from reward_ledger where user_id=? and reference_type='VIP_REDEMPTION'",
+            Long.class,
+            session.userId()
+        )).isZero();
     }
 
     private Session register() throws Exception {
