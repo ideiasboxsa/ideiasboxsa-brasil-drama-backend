@@ -1,5 +1,7 @@
 package br.com.brasildrama.auth;
 
+import br.com.brasildrama.identity.VisitorIdentity;
+import br.com.brasildrama.identity.VisitorMergeService;
 import br.com.brasildrama.rewards.RewardGrantService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -30,32 +32,49 @@ public class AuthApi {
     private final PasswordEncoder passwords;
     private final JwtService jwt;
     private final RewardGrantService rewardGrants;
+    private final VisitorMergeService visitorMerges;
 
-    public AuthApi(UserAccountRepository users, PasswordEncoder passwords, JwtService jwt, RewardGrantService rewardGrants) {
+    public AuthApi(
+        UserAccountRepository users,
+        PasswordEncoder passwords,
+        JwtService jwt,
+        RewardGrantService rewardGrants,
+        VisitorMergeService visitorMerges
+    ) {
         this.users = users;
         this.passwords = passwords;
         this.jwt = jwt;
         this.rewardGrants = rewardGrants;
+        this.visitorMerges = visitorMerges;
     }
 
     @PostMapping("/v1/auth/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
-    LoginResponse register(@Valid @RequestBody RegisterRequest request) {
+    LoginResponse register(
+        @Valid @RequestBody RegisterRequest request,
+        @RequestHeader(value = VisitorIdentity.HEADER, required = false) String visitorId
+    ) {
         var email = normalizeEmail(request.email());
         if (users.existsByEmailIgnoreCase(email)) throw new ResponseStatusException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS");
         var user = new UserAccount(UUID.randomUUID(), email, request.displayName().trim(), passwords.encode(request.password()));
         users.saveAndFlush(user);
+        visitorMerges.merge(visitorId, user.id);
         long welcomeBonus = rewardGrants.grantWelcomeBonus(user.id);
         return response(user, welcomeBonus);
     }
 
     @PostMapping("/v1/auth/login")
-    LoginResponse login(@Valid @RequestBody LoginRequest request) {
+    @Transactional
+    LoginResponse login(
+        @Valid @RequestBody LoginRequest request,
+        @RequestHeader(value = VisitorIdentity.HEADER, required = false) String visitorId
+    ) {
         var user = users.findByEmailIgnoreCase(normalizeEmail(request.email()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS"));
         if (user.passwordHash == null || !passwords.matches(request.password(), user.passwordHash))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS");
+        visitorMerges.merge(visitorId, user.id);
         long welcomeBonus = rewardGrants.grantWelcomeBonus(user.id);
         return response(user, welcomeBonus);
     }
