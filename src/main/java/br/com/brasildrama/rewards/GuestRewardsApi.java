@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -40,6 +41,46 @@ class GuestRewardsApi {
             )
         );
 
+        var checkInCycle = jdbc.query(
+            "select day_number,reward_amount from reward_checkin_cycle where enabled=true order by day_number asc",
+            (rs, row) -> new GuestCheckInDayDto(
+                rs.getInt("day_number"),
+                rs.getLong("reward_amount")
+            )
+        );
+
+        var missions = new ArrayList<GuestRewardMissionDto>();
+        missions.add(new GuestRewardMissionDto(
+            "LOGIN",
+            "Entre na sua conta",
+            "Sincronize seus benefícios e ganhe sua recompensa de boas-vindas.",
+            "BONUS",
+            loginRewardAmount,
+            1L,
+            "ACCOUNT",
+            "brasildrama://account"
+        ));
+        missions.addAll(jdbc.query(
+            """
+            select id,title,description,reward_type,reward_amount,target,trigger_type,action_url
+              from reward_mission
+             where enabled=true
+               and (starts_at is null or starts_at<=now())
+               and (ends_at is null or ends_at>now())
+             order by reward_amount desc,id asc
+            """,
+            (rs, row) -> new GuestRewardMissionDto(
+                rs.getString("id"),
+                rs.getString("title"),
+                rs.getString("description"),
+                rs.getString("reward_type"),
+                rs.getLong("reward_amount"),
+                rs.getObject("target") == null ? null : rs.getLong("target"),
+                rs.getString("trigger_type"),
+                rs.getString("action_url")
+            )
+        ));
+
         return new GuestRewardsOverviewDto(
             visitor.externalId(),
             0L,
@@ -52,16 +93,8 @@ class GuestRewardsApi {
             RewardEconomyModel.tabTapEnabled(),
             RewardEconomyModel.orderedTracks().stream().map(Enum::name).toList(),
             vipCatalog,
-            List.of(
-                new GuestRewardMissionDto(
-                    "LOGIN",
-                    "Entre na sua conta",
-                    "Sincronize seus benefícios e ganhe sua recompensa de boas-vindas.",
-                    "BONUS",
-                    loginRewardAmount,
-                    "brasildrama://account"
-                )
-            )
+            checkInCycle,
+            List.copyOf(missions)
         );
     }
 
@@ -88,6 +121,7 @@ class GuestRewardsApi {
         boolean tabTapEnabled,
         List<String> economyOrder,
         List<GuestVipRedemptionDto> vipCatalog,
+        List<GuestCheckInDayDto> checkInCycle,
         List<GuestRewardMissionDto> missions
     ) {}
 
@@ -99,12 +133,19 @@ class GuestRewardsApi {
         boolean enabled
     ) {}
 
+    record GuestCheckInDayDto(
+        int day,
+        long rewardAmount
+    ) {}
+
     record GuestRewardMissionDto(
         String id,
         String title,
         String description,
         String rewardType,
         long rewardAmount,
+        Long target,
+        String triggerType,
         String actionUrl
     ) {}
 }
