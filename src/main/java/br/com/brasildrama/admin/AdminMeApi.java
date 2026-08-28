@@ -40,6 +40,7 @@ class AdminMeApi {
         }
 
         operator.displayName = displayName;
+        operator.updatedAt = Instant.now();
         operators.save(operator);
         return ResponseEntity.ok(profileOf(operator));
     }
