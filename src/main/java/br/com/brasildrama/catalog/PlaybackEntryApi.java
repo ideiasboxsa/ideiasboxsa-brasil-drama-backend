@@ -34,13 +34,18 @@ class PlaybackEntryApi {
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "DRAMA_HAS_NO_PLAYABLE_EPISODE"));
 
+        var resolvedPlaybackUrl = playbackUrl(episode);
+        if (resolvedPlaybackUrl == null || resolvedPlaybackUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PLAYBACK_URL_UNAVAILABLE");
+        }
+
         return new PlaybackEntryDto(
             dramaId.toString(),
             episode.id.toString(),
             episode.number,
             episode.free,
             episode.coinPrice,
-            playbackUrl(episode)
+            resolvedPlaybackUrl
         );
     }
 
