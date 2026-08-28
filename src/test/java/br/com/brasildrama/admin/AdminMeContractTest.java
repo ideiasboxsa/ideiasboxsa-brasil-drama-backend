@@ -18,6 +18,7 @@ class AdminMeContractTest {
     void updatesDisplayNameForCurrentActiveOperator() {
         var repository = mock(AdminOperatorRepository.class);
         var operator = operator("Nome Antigo");
+        var previousUpdatedAt = operator.updatedAt;
         when(repository.findById(operator.id)).thenReturn(Optional.of(operator));
         when(repository.save(any(AdminOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var api = new AdminMeApi(repository);
@@ -26,8 +27,11 @@ class AdminMeContractTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(operator.displayName).isEqualTo("Novo Nome");
+        assertThat(operator.updatedAt).isAfter(previousUpdatedAt);
         assertThat(response.getBody()).isInstanceOf(AdminMeApi.AdminProfile.class);
-        assertThat(((AdminMeApi.AdminProfile) response.getBody()).displayName()).isEqualTo("Novo Nome");
+        var profile = (AdminMeApi.AdminProfile) response.getBody();
+        assertThat(profile.displayName()).isEqualTo("Novo Nome");
+        assertThat(profile.updatedAt()).isEqualTo(operator.updatedAt);
         verify(repository).save(operator);
     }
 
