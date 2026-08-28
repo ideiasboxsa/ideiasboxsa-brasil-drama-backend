@@ -32,7 +32,8 @@ record PlaybackEventRequest(
 @RestController
 class PlaybackAnalyticsApi {
     private static final Set<String> ACCEPTED_EVENTS = Set.of(
-        "play", "pause", "completion", "progress_25", "progress_50", "progress_75",
+        "play", "pause", "completion", "watch_3s", "progress_25", "progress_50", "progress_75",
+        "skip", "abandon", "next_episode", "binge_session",
         "quality_changed", "subtitle_changed", "error"
     );
 
