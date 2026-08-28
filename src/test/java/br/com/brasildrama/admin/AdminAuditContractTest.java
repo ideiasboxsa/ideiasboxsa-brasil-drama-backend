@@ -61,12 +61,41 @@ class AdminAuditContractTest {
     }
 
     @Test
+    void exposesServerDrivenActionCatalogToSuperAdmin() {
+        var operators = mock(AdminOperatorRepository.class);
+        var logs = mock(AdminAuditLogRepository.class);
+        var actor = operator(AdminRole.SUPER_ADMIN, "Admin", "admin@brasildrama.com.br");
+        when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
+
+        var response = new AdminAuditApi(operators, logs).actions(principal(actor.id));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        var body = (List<?>) response.getBody();
+        assertThat(body).isNotEmpty();
+        var first = (AdminAuditApi.ActionView) body.getFirst();
+        assertThat(first.action()).isNotBlank();
+        assertThat(first.label()).isNotBlank();
+        verifyNoInteractions(logs);
+    }
+
+    @Test
     void rejectsNonSuperAdmin() {
         var operators = mock(AdminOperatorRepository.class);
         var logs = mock(AdminAuditLogRepository.class);
         var actor = operator(AdminRole.EDITOR, "Editor", "editor@brasildrama.com.br");
         when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
         var response = new AdminAuditApi(operators, logs).latest(principal(actor.id), null, null);
+        assertThat(response.getStatusCode().value()).isEqualTo(403);
+        verifyNoInteractions(logs);
+    }
+
+    @Test
+    void rejectsActionCatalogForNonSuperAdmin() {
+        var operators = mock(AdminOperatorRepository.class);
+        var logs = mock(AdminAuditLogRepository.class);
+        var actor = operator(AdminRole.SUPPORT, "Suporte", "support@brasildrama.com.br");
+        when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
+        var response = new AdminAuditApi(operators, logs).actions(principal(actor.id));
         assertThat(response.getStatusCode().value()).isEqualTo(403);
         verifyNoInteractions(logs);
     }
