@@ -53,3 +53,5 @@ databaseChangeLog:
       file: db/changelog/030-anonymous-discovery.yaml
   - include:
       file: db/changelog/031-drama-likes.yaml
+  - include:
+      file: db/changelog/032-admin-audit-log.yaml
