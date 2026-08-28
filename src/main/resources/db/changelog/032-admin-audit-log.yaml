@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: 032-admin-audit-log
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: admin_audit_log
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: actor_operator_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_admin_audit_actor
+                    references: admin_operator(id)
+              - column:
+                  name: action
+                  type: varchar(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity_type
+                  type: varchar(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: entity_id
+                  type: varchar(160)
+              - column:
+                  name: summary
+                  type: varchar(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: admin_audit_log
+            indexName: idx_admin_audit_created
+            columns:
+              - column: { name: created_at, descending: true }
+        - createIndex:
+            tableName: admin_audit_log
+            indexName: idx_admin_audit_actor_created
+            columns:
+              - column: { name: actor_operator_id }
+              - column: { name: created_at, descending: true }
