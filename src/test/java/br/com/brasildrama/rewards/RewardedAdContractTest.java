@@ -57,8 +57,9 @@ class RewardedAdContractTest {
             .andExpect(jsonPath("$.bonusBalance").value(20));
 
         assertThat(jdbc.queryForObject(
-            "select count(*) from reward_ledger where ledger_type='BONUS' and operation_key=?",
+            "select count(*) from reward_ledger where ledger_type='BONUS' and operation_key=? and reference_type='REWARDED_AD' and reference_id=?",
             Long.class,
+            "rewarded-ad:" + operationKey,
             operationKey
         )).isEqualTo(1L);
     }
