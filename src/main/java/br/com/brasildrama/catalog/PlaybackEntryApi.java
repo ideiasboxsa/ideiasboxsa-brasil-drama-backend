@@ -65,7 +65,11 @@ class PlaybackEntryApi {
         if (rawUrl == null || rawUrl.isBlank()) return false;
         try {
             var uri = URI.create(rawUrl.trim());
-            return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && !uri.getHost().isBlank();
+            return "https".equalsIgnoreCase(uri.getScheme())
+                && uri.getHost() != null
+                && !uri.getHost().isBlank()
+                && uri.getUserInfo() == null
+                && (uri.getPort() == -1 || uri.getPort() == 443);
         } catch (IllegalArgumentException ex) {
             return false;
         }
