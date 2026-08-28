@@ -49,6 +49,7 @@ class AdminAuditApi {
         if(currentSuperAdmin(principal)==null)return ResponseEntity.status(403).build();
         var raw=logs.findAllByOrderByCreatedAtDesc(PageRequest.of(0,100));
         var actorIds=raw.stream().map(log->log.actorOperatorId).collect(Collectors.toSet());
+        if(actorIds.isEmpty())return ResponseEntity.ok(List.of());
         var result=operators.findAllById(actorIds).stream()
             .sorted(Comparator.comparing(operator->operator.displayName==null?"":operator.displayName,String.CASE_INSENSITIVE_ORDER))
             .map(operator->new ActorView(operator.id,operator.displayName,operator.email))
@@ -61,7 +62,7 @@ class AdminAuditApi {
         var normalizedAction=action==null?null:action.trim().toUpperCase(Locale.ROOT);
         var raw=logs.findAllByOrderByCreatedAtDesc(PageRequest.of(0,100));
         var actorIds=raw.stream().map(log->log.actorOperatorId).collect(Collectors.toSet());
-        var actors=operators.findAllById(actorIds).stream().collect(Collectors.toMap(operator->operator.id,Function.identity()));
+        var actors=actorIds.isEmpty()?Map.<UUID,AdminOperator>of():operators.findAllById(actorIds).stream().collect(Collectors.toMap(operator->operator.id,Function.identity()));
         var result=raw.stream().filter(log->normalizedAction==null||normalizedAction.isBlank()||normalizedAction.equals(log.action)).filter(log->actorOperatorId==null||actorOperatorId.equals(log.actorOperatorId)).map(log->{var source=actors.get(log.actorOperatorId);return new AuditView(log.id,log.actorOperatorId,source==null?"Operador":source.displayName,source==null?null:source.email,log.action,log.entityType,log.entityId,log.summary,log.createdAt);}).toList();return ResponseEntity.ok(result);
     }
     private AdminOperator currentSuperAdmin(Principal principal){if(principal==null)return null;try{return operators.findById(UUID.fromString(principal.getName())).filter(value->value.active&&value.role==AdminRole.SUPER_ADMIN).orElse(null);}catch(IllegalArgumentException ex){return null;}}
