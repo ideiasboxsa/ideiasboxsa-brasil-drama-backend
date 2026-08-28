@@ -55,3 +55,5 @@ databaseChangeLog:
       file: db/changelog/031-drama-likes.yaml
   - include:
       file: db/changelog/032-admin-audit-log.yaml
+  - include:
+      file: db/changelog/033-visitor-identity.yaml
