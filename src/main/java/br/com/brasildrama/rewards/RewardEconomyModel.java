@@ -21,6 +21,14 @@ final class RewardEconomyModel {
         return "HORIZONTAL_SWIPE";
     }
 
+    static String forwardGesture() {
+        return "SWIPE_RIGHT";
+    }
+
+    static String backGesture() {
+        return "SWIPE_LEFT";
+    }
+
     static boolean tabTapEnabled() {
         return true;
     }
