@@ -26,9 +26,7 @@ class AdminOperatorsContractTest {
         when(repository.findById(actor.id)).thenReturn(Optional.of(actor));
         when(repository.findAll()).thenReturn(List.of(editor, actor));
         var api = api(repository);
-
         var response = api.list(() -> actor.id.toString());
-
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).asList().hasSize(2);
     }
@@ -39,9 +37,7 @@ class AdminOperatorsContractTest {
         var actor = operator("support@brasildrama.com", "Suporte", AdminRole.SUPPORT, true);
         when(repository.findById(actor.id)).thenReturn(Optional.of(actor));
         var api = api(repository);
-
         var response = api.list(() -> actor.id.toString());
-
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         verify(repository, never()).findAll();
     }
@@ -52,13 +48,7 @@ class AdminOperatorsContractTest {
         var actor = operator("admin@brasildrama.com", "Admin", AdminRole.SUPER_ADMIN, true);
         when(repository.findById(actor.id)).thenReturn(Optional.of(actor));
         var api = api(repository);
-
-        var response = api.update(
-            actor.id,
-            new AdminOperatorsApi.UpdateOperatorRequest("EDITOR", false),
-            () -> actor.id.toString()
-        );
-
+        var response = api.update(actor.id, new AdminOperatorsApi.UpdateOperatorRequest("EDITOR", false), () -> actor.id.toString());
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isEqualTo(new AdminOperatorsApi.ErrorResponse("SELF_ACCESS_CHANGE_BLOCKED"));
         verify(repository, never()).save(any());
@@ -73,13 +63,7 @@ class AdminOperatorsContractTest {
         when(repository.findById(target.id)).thenReturn(Optional.of(target));
         when(repository.save(any(AdminOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var api = api(repository);
-
-        var response = api.update(
-            target.id,
-            new AdminOperatorsApi.UpdateOperatorRequest("CONTENT_ADMIN", false),
-            () -> actor.id.toString()
-        );
-
+        var response = api.update(target.id, new AdminOperatorsApi.UpdateOperatorRequest("CONTENT_ADMIN", false), () -> actor.id.toString());
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(target.role).isEqualTo(AdminRole.CONTENT_ADMIN);
         assertThat(target.active).isFalse();
@@ -91,18 +75,14 @@ class AdminOperatorsContractTest {
         var repository = mock(AdminOperatorRepository.class);
         var encoder = mock(PasswordEncoder.class);
         var resetService = mock(AdminPasswordResetService.class);
+        var audit = mock(AdminAuditService.class);
         var actor = operator("admin@brasildrama.com", "Admin", AdminRole.SUPER_ADMIN, true);
         when(repository.findById(actor.id)).thenReturn(Optional.of(actor));
         when(repository.findByEmailIgnoreCase("novo@brasildrama.com")).thenReturn(Optional.empty());
         when(encoder.encode(any())).thenReturn("encoded-one-time-secret");
         when(repository.save(any(AdminOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        var api = new AdminOperatorsApi(repository, encoder, resetService);
-
-        var response = api.invite(
-            new AdminOperatorsApi.InviteOperatorRequest(" Novo@BrasilDrama.com ", " Novo Operador ", "EDITOR"),
-            () -> actor.id.toString()
-        );
-
+        var api = new AdminOperatorsApi(repository, encoder, resetService, audit);
+        var response = api.invite(new AdminOperatorsApi.InviteOperatorRequest(" Novo@BrasilDrama.com ", " Novo Operador ", "EDITOR"), () -> actor.id.toString());
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isInstanceOf(AdminOperatorsApi.InviteOperatorResponse.class);
         var body = (AdminOperatorsApi.InviteOperatorResponse) response.getBody();
@@ -111,6 +91,7 @@ class AdminOperatorsContractTest {
         assertThat(body.operator().role()).isEqualTo("EDITOR");
         assertThat(body.onboarding()).isEqualTo("PASSWORD_SETUP_EMAIL_REQUESTED");
         verify(resetService).request("novo@brasildrama.com");
+        verify(audit).record(actor.id, "OPERATOR_INVITED", "ADMIN_OPERATOR", body.operator().id().toString(), "Operador convidado: novo@brasildrama.com · role EDITOR");
     }
 
     @Test
@@ -121,19 +102,14 @@ class AdminOperatorsContractTest {
         when(repository.findById(actor.id)).thenReturn(Optional.of(actor));
         when(repository.findByEmailIgnoreCase(existing.email)).thenReturn(Optional.of(existing));
         var api = api(repository);
-
-        var response = api.invite(
-            new AdminOperatorsApi.InviteOperatorRequest(existing.email, "Outro Editor", "EDITOR"),
-            () -> actor.id.toString()
-        );
-
+        var response = api.invite(new AdminOperatorsApi.InviteOperatorRequest(existing.email, "Outro Editor", "EDITOR"), () -> actor.id.toString());
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isEqualTo(new AdminOperatorsApi.ErrorResponse("ADMIN_OPERATOR_EMAIL_EXISTS"));
         verify(repository, never()).save(any());
     }
 
     private static AdminOperatorsApi api(AdminOperatorRepository repository) {
-        return new AdminOperatorsApi(repository, mock(PasswordEncoder.class), mock(AdminPasswordResetService.class));
+        return new AdminOperatorsApi(repository, mock(PasswordEncoder.class), mock(AdminPasswordResetService.class), mock(AdminAuditService.class));
     }
 
     private static AdminOperator operator(String email, String displayName, AdminRole role, boolean active) {
