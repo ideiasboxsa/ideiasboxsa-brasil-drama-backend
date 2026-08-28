@@ -1,6 +1,7 @@
 package br.com.brasildrama.recommendation;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -79,6 +80,7 @@ class RecommendationApi {
         String principalClause = userId != null ? "pe.user_id = ?" : "pe.visitor_id = ?";
         Object principal = userId != null ? userId : visitorId;
         var scores = new HashMap<String, Double>();
+        RowCallbackHandler handler = rs -> scores.put(rs.getString("genre"), Math.max(0.0, rs.getDouble("score")));
         jdbc.query("""
             select lower(d.genre) genre,
                    sum(case pe.event_type
@@ -96,10 +98,7 @@ class RecommendationApi {
             where %s
               and pe.created_at >= now() - interval '60 days'
             group by lower(d.genre)
-            """.formatted(principalClause),
-            rs -> scores.put(rs.getString("genre"), Math.max(0.0, rs.getDouble("score"))),
-            principal
-        );
+            """.formatted(principalClause), handler, principal);
         return scores;
     }
 
