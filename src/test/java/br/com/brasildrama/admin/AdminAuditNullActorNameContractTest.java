@@ -32,7 +32,7 @@ class AdminAuditNullActorNameContractTest {
         assertThat(body).hasSize(1);
         var actor = (AdminAuditApi.ActorView) body.getFirst();
         assertThat(actor.id()).isEqualTo(unnamed.id);
-        assertThat(actor.displayName()).isNull();
+        assertThat(actor.displayName()).isEqualTo("editor@brasildrama.com.br");
         assertThat(actor.email()).isEqualTo("editor@brasildrama.com.br");
     }
 
