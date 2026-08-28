@@ -2,6 +2,8 @@ package br.com.brasildrama.admin;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,25 +23,50 @@ class AdminMeApi {
 
     @GetMapping
     ResponseEntity<?> me(Principal principal) {
-        if (principal == null) return ResponseEntity.status(401).build();
+        var operator = currentOperator(principal);
+        return operator == null
+            ? ResponseEntity.status(401).build()
+            : ResponseEntity.ok(profileOf(operator));
+    }
+
+    @PutMapping
+    ResponseEntity<?> update(Principal principal, @RequestBody UpdateProfileRequest request) {
+        var operator = currentOperator(principal);
+        if (operator == null) return ResponseEntity.status(401).build();
+
+        var displayName = request.displayName() == null ? "" : request.displayName().trim();
+        if (displayName.length() < 2 || displayName.length() > 160) {
+            return ResponseEntity.badRequest().body(new ValidationError("DISPLAY_NAME_INVALID"));
+        }
+
+        operator.displayName = displayName;
+        operators.save(operator);
+        return ResponseEntity.ok(profileOf(operator));
+    }
+
+    private AdminOperator currentOperator(Principal principal) {
+        if (principal == null) return null;
         try {
             var id = UUID.fromString(principal.getName());
             return operators.findById(id)
                 .filter(operator -> operator.active)
-                .<ResponseEntity<?>>map(operator -> ResponseEntity.ok(new AdminProfile(
-                    operator.id,
-                    operator.email,
-                    operator.displayName,
-                    operator.role.name(),
-                    operator.active,
-                    permissionsFor(operator.role),
-                    operator.createdAt,
-                    operator.updatedAt
-                )))
-                .orElseGet(() -> ResponseEntity.status(401).build());
+                .orElse(null);
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(401).build();
+            return null;
         }
+    }
+
+    private AdminProfile profileOf(AdminOperator operator) {
+        return new AdminProfile(
+            operator.id,
+            operator.email,
+            operator.displayName,
+            operator.role.name(),
+            operator.active,
+            permissionsFor(operator.role),
+            operator.createdAt,
+            operator.updatedAt
+        );
     }
 
     private List<String> permissionsFor(AdminRole role) {
@@ -52,6 +79,8 @@ class AdminMeApi {
         };
     }
 
+    record UpdateProfileRequest(String displayName) {}
+    record ValidationError(String code) {}
     record AdminProfile(
         UUID id,
         String email,
