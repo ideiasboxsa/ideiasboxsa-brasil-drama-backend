@@ -37,7 +37,7 @@ class AdminAuditActorLabelFallbackContractTest {
         var body = (List<?>) response.getBody();
         assertThat(body).hasSize(3);
         assertThat(body.stream().map(item -> ((AdminAuditApi.ActorView) item).displayName()))
-            .containsExactly("editor@brasildrama.com.br", "Operador", "Maria");
+            .containsExactly("editor@brasildrama.com.br", "Maria", "Operador");
     }
 
     private static AdminOperator operator(AdminRole role, String name, String email) {
