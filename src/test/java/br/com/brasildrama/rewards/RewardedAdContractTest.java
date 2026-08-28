@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -54,6 +55,12 @@ class RewardedAdContractTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.accepted").value(false))
             .andExpect(jsonPath("$.bonusBalance").value(20));
+
+        assertThat(jdbc.queryForObject(
+            "select count(*) from reward_ledger where ledger_type='BONUS' and operation_key=?",
+            Long.class,
+            operationKey
+        )).isEqualTo(1L);
     }
 
     @Test
