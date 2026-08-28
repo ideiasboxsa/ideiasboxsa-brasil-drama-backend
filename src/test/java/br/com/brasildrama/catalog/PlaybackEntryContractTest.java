@@ -35,6 +35,24 @@ class PlaybackEntryContractTest {
     }
 
     @Test
+    void publishedDramaWithoutPlayableEpisodeReturnsConflict() {
+        var dramas = mock(DramaRepository.class);
+        var episodes = mock(EpisodeRepository.class);
+        var media = mock(MediaStorageService.class);
+        var drama = drama(DramaStatus.PUBLISHED);
+        when(dramas.findById(drama.id)).thenReturn(Optional.of(drama));
+        when(episodes.findByDramaIdOrderByNumberAsc(drama.id)).thenReturn(List.of(episode(drama.id, 1, " ")));
+
+        assertThatThrownBy(() -> new PlaybackEntryApi(dramas, episodes, media).playbackEntry(drama.id))
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(error -> {
+                var response = (ResponseStatusException) error;
+                assertThat(response.getStatusCode().value()).isEqualTo(409);
+                assertThat(response.getReason()).isEqualTo("DRAMA_HAS_NO_PLAYABLE_EPISODE");
+            });
+    }
+
+    @Test
     void draftDramaCannotExposePlaybackEntry() {
         var dramas = mock(DramaRepository.class);
         var episodes = mock(EpisodeRepository.class);
