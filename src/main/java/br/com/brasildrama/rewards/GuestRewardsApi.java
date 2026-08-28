@@ -46,6 +46,9 @@ class GuestRewardsApi {
             0L,
             loginRewardAmount,
             false,
+            RewardEconomyModel.navigationMode(),
+            RewardEconomyModel.tabTapEnabled(),
+            RewardEconomyModel.orderedTracks().stream().map(Enum::name).toList(),
             vipCatalog,
             List.of(
                 new GuestRewardMissionDto(
@@ -77,6 +80,9 @@ class GuestRewardsApi {
         long vipPointsBalance,
         long loginRewardAmount,
         boolean authenticated,
+        String navigationMode,
+        boolean tabTapEnabled,
+        List<String> economyOrder,
         List<GuestVipRedemptionDto> vipCatalog,
         List<GuestRewardMissionDto> missions
     ) {}
