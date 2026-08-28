@@ -16,7 +16,7 @@ public class RewardGrantService {
     public RewardGrantService(
         JdbcTemplate jdbc,
         @Value("${rewards.welcome.enabled:false}") boolean welcomeEnabled,
-        @Value("${rewards.welcome.bonus:50}") long welcomeBonus
+        @Value("${rewards.welcome.bonus:100}") long welcomeBonus
     ) {
         this.jdbc = jdbc;
         this.welcomeEnabled = welcomeEnabled;
