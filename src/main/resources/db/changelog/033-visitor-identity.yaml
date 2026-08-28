@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 033-visitor-identity
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: visitor_identity
+            columns:
+              - column:
+                  name: visitor_id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: first_seen_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_seen_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: merged_user_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_visitor_identity_user
+                    references: app_user(id)
+              - column:
+                  name: merged_at
+                  type: timestamptz
+        - createIndex:
+            tableName: visitor_identity
+            indexName: idx_visitor_identity_last_seen
+            columns:
+              - column: { name: last_seen_at, descending: true }
+        - createIndex:
+            tableName: visitor_identity
+            indexName: idx_visitor_identity_merged_user
+            columns:
+              - column: { name: merged_user_id }
