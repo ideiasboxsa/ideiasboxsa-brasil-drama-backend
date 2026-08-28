@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
 import java.util.UUID;
 
 @RestController
@@ -35,7 +36,7 @@ class PlaybackEntryApi {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "DRAMA_HAS_NO_PLAYABLE_EPISODE"));
 
         var resolvedPlaybackUrl = playbackUrl(episode);
-        if (resolvedPlaybackUrl == null || resolvedPlaybackUrl.isBlank()) {
+        if (!securePlaybackUrl(resolvedPlaybackUrl)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "PLAYBACK_URL_UNAVAILABLE");
         }
 
@@ -45,7 +46,7 @@ class PlaybackEntryApi {
             episode.number,
             episode.free,
             episode.coinPrice,
-            resolvedPlaybackUrl
+            resolvedPlaybackUrl.trim()
         );
     }
 
@@ -58,6 +59,16 @@ class PlaybackEntryApi {
         return episode.videoObjectKey == null || episode.videoObjectKey.isBlank()
             ? episode.videoUrl
             : media.readUrl(episode.videoObjectKey);
+    }
+
+    private boolean securePlaybackUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) return false;
+        try {
+            var uri = URI.create(rawUrl.trim());
+            return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && !uri.getHost().isBlank();
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     record PlaybackEntryDto(
