@@ -19,21 +19,23 @@ class AdminAuditContractTest {
         var operators = mock(AdminOperatorRepository.class);
         var logs = mock(AdminAuditLogRepository.class);
         var actor = operator(AdminRole.SUPER_ADMIN, "Admin", "admin@brasildrama.com.br");
-        var source = operator(AdminRole.CONTENT_EDITOR, "Editor Drama", "editor@brasildrama.com.br");
-        var log = audit(source.id, "OPERATOR_INVITED");
+        var source = operator(AdminRole.EDITOR, "Editor Drama", "editor@brasildrama.com.br");
+        var matching = audit(source.id, "OPERATOR_INVITED");
+        var ignored = audit(source.id, "OPERATOR_ROLE_CHANGED");
         when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
-        when(logs.findAllByActionOrderByCreatedAtDesc(eq("OPERATOR_INVITED"), any(PageRequest.class))).thenReturn(List.of(log));
+        when(logs.findAllByOrderByCreatedAtDesc(any(PageRequest.class))).thenReturn(List.of(matching, ignored));
         when(operators.findAllById(any())).thenReturn(List.of(source));
 
-        var response = new AdminAuditApi(operators, logs).latest(principal(actor.id), "OPERATOR_INVITED", null);
+        var response = new AdminAuditApi(operators, logs).latest(principal(actor.id), " operator_invited ", null);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         var body = (List<?>) response.getBody();
         assertThat(body).hasSize(1);
         var view = (AdminAuditApi.AuditView) body.getFirst();
+        assertThat(view.action()).isEqualTo("OPERATOR_INVITED");
         assertThat(view.actorDisplayName()).isEqualTo("Editor Drama");
         assertThat(view.actorEmail()).isEqualTo("editor@brasildrama.com.br");
-        verify(logs).findAllByActionOrderByCreatedAtDesc(eq("OPERATOR_INVITED"), any(PageRequest.class));
+        verify(logs).findAllByOrderByCreatedAtDesc(any(PageRequest.class));
         verify(operators).findAllById(any());
     }
 
@@ -42,27 +44,27 @@ class AdminAuditContractTest {
         var operators = mock(AdminOperatorRepository.class);
         var logs = mock(AdminAuditLogRepository.class);
         var actor = operator(AdminRole.SUPER_ADMIN, "Admin", "admin@brasildrama.com.br");
-        var source = operator(AdminRole.CONTENT_EDITOR, "Editor Drama", "editor@brasildrama.com.br");
-        var log = audit(source.id, "OPERATOR_ROLE_CHANGED");
+        var source = operator(AdminRole.EDITOR, "Editor Drama", "editor@brasildrama.com.br");
+        var other = operator(AdminRole.SUPPORT, "Suporte", "support@brasildrama.com.br");
         when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
-        when(logs.findAllByActorOperatorIdOrderByCreatedAtDesc(eq(source.id), any(PageRequest.class))).thenReturn(List.of(log));
-        when(operators.findAllById(any())).thenReturn(List.of(source));
+        when(logs.findAllByOrderByCreatedAtDesc(any(PageRequest.class))).thenReturn(List.of(
+            audit(source.id, "OPERATOR_ROLE_CHANGED"), audit(other.id, "OPERATOR_INVITED")
+        ));
+        when(operators.findAllById(any())).thenReturn(List.of(source, other));
 
         var response = new AdminAuditApi(operators, logs).latest(principal(actor.id), null, source.id);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         var body = (List<?>) response.getBody();
         assertThat(body).hasSize(1);
-        var view = (AdminAuditApi.AuditView) body.getFirst();
-        assertThat(view.actorOperatorId()).isEqualTo(source.id);
-        verify(logs).findAllByActorOperatorIdOrderByCreatedAtDesc(eq(source.id), any(PageRequest.class));
+        assertThat(((AdminAuditApi.AuditView) body.getFirst()).actorOperatorId()).isEqualTo(source.id);
     }
 
     @Test
     void rejectsNonSuperAdmin() {
         var operators = mock(AdminOperatorRepository.class);
         var logs = mock(AdminAuditLogRepository.class);
-        var actor = operator(AdminRole.CONTENT_EDITOR, "Editor", "editor@brasildrama.com.br");
+        var actor = operator(AdminRole.EDITOR, "Editor", "editor@brasildrama.com.br");
         when(operators.findById(actor.id)).thenReturn(Optional.of(actor));
         var response = new AdminAuditApi(operators, logs).latest(principal(actor.id), null, null);
         assertThat(response.getStatusCode().value()).isEqualTo(403);
