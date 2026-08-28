@@ -45,6 +45,17 @@ class AdminAuditApi {
         return ResponseEntity.ok(ACTIONS);
     }
 
+    @GetMapping("/actors") ResponseEntity<?> actors(Principal principal){
+        if(currentSuperAdmin(principal)==null)return ResponseEntity.status(403).build();
+        var raw=logs.findAllByOrderByCreatedAtDesc(PageRequest.of(0,100));
+        var actorIds=raw.stream().map(log->log.actorOperatorId).collect(Collectors.toSet());
+        var result=operators.findAllById(actorIds).stream()
+            .sorted(Comparator.comparing(operator->operator.displayName==null?"":operator.displayName,String.CASE_INSENSITIVE_ORDER))
+            .map(operator->new ActorView(operator.id,operator.displayName,operator.email))
+            .toList();
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping ResponseEntity<?> latest(Principal principal,@RequestParam(required=false) String action,@RequestParam(required=false) UUID actorOperatorId){
         var actor=currentSuperAdmin(principal);if(actor==null)return ResponseEntity.status(403).build();
         var normalizedAction=action==null?null:action.trim().toUpperCase(Locale.ROOT);
@@ -55,5 +66,6 @@ class AdminAuditApi {
     }
     private AdminOperator currentSuperAdmin(Principal principal){if(principal==null)return null;try{return operators.findById(UUID.fromString(principal.getName())).filter(value->value.active&&value.role==AdminRole.SUPER_ADMIN).orElse(null);}catch(IllegalArgumentException ex){return null;}}
     record ActionView(String action,String label){}
+    record ActorView(UUID id,String displayName,String email){}
     record AuditView(UUID id,UUID actorOperatorId,String actorDisplayName,String actorEmail,String action,String entityType,String entityId,String summary,Instant createdAt){}
 }
