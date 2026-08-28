@@ -35,6 +35,10 @@ class PlaybackEntryApi {
             .findFirst()
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "DRAMA_HAS_NO_PLAYABLE_EPISODE"));
 
+        if (!validPricing(episode)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PLAYBACK_PRICE_INVALID");
+        }
+
         var resolvedPlaybackUrl = playbackUrl(episode);
         if (!securePlaybackUrl(resolvedPlaybackUrl)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "PLAYBACK_URL_UNAVAILABLE");
@@ -53,6 +57,11 @@ class PlaybackEntryApi {
     private boolean hasPlayback(EpisodeEntity episode) {
         return (episode.videoObjectKey != null && !episode.videoObjectKey.isBlank())
             || (episode.videoUrl != null && !episode.videoUrl.isBlank());
+    }
+
+    private boolean validPricing(EpisodeEntity episode) {
+        return episode.coinPrice >= 0
+            && ((episode.free && episode.coinPrice == 0) || (!episode.free && episode.coinPrice > 0));
     }
 
     private String playbackUrl(EpisodeEntity episode) {
