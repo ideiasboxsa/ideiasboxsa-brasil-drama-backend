@@ -30,37 +30,30 @@ interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog,UUID>{List
 }
 @RestController @RequestMapping("/v1/admin/audit")
 class AdminAuditApi {
+    private static final List<ActionView> ACTIONS=List.of(
+        new ActionView("OPERATOR_INVITED","Operador convidado"),
+        new ActionView("OPERATOR_ROLE_CHANGED","Função alterada"),
+        new ActionView("OPERATOR_ACTIVATED","Operador ativado"),
+        new ActionView("OPERATOR_DEACTIVATED","Operador desativado"),
+        new ActionView("PROFILE_DISPLAY_NAME_CHANGED","Perfil atualizado")
+    );
     private final AdminOperatorRepository operators; private final AdminAuditLogRepository logs;
     AdminAuditApi(AdminOperatorRepository operators,AdminAuditLogRepository logs){this.operators=operators;this.logs=logs;}
 
-    @GetMapping ResponseEntity<?> latest(
-        Principal principal,
-        @RequestParam(required=false) String action,
-        @RequestParam(required=false) UUID actorOperatorId
-    ){
-        var actor=currentSuperAdmin(principal);
-        if(actor==null)return ResponseEntity.status(403).build();
+    @GetMapping("/actions") ResponseEntity<?> actions(Principal principal){
+        if(currentSuperAdmin(principal)==null)return ResponseEntity.status(403).build();
+        return ResponseEntity.ok(ACTIONS);
+    }
 
+    @GetMapping ResponseEntity<?> latest(Principal principal,@RequestParam(required=false) String action,@RequestParam(required=false) UUID actorOperatorId){
+        var actor=currentSuperAdmin(principal);if(actor==null)return ResponseEntity.status(403).build();
         var normalizedAction=action==null?null:action.trim().toUpperCase(Locale.ROOT);
         var raw=logs.findAllByOrderByCreatedAtDesc(PageRequest.of(0,100));
         var actorIds=raw.stream().map(log->log.actorOperatorId).collect(Collectors.toSet());
-        var actors=operators.findAllById(actorIds).stream().collect(Collectors.toMap(operator->operator.id, Function.identity()));
-
-        var result=raw.stream()
-            .filter(log->normalizedAction==null||normalizedAction.isBlank()||normalizedAction.equals(log.action))
-            .filter(log->actorOperatorId==null||actorOperatorId.equals(log.actorOperatorId))
-            .map(log->{
-                var source=actors.get(log.actorOperatorId);
-                return new AuditView(log.id,log.actorOperatorId,source==null?"Operador":source.displayName,source==null?null:source.email,log.action,log.entityType,log.entityId,log.summary,log.createdAt);
-            }).toList();
-        return ResponseEntity.ok(result);
+        var actors=operators.findAllById(actorIds).stream().collect(Collectors.toMap(operator->operator.id,Function.identity()));
+        var result=raw.stream().filter(log->normalizedAction==null||normalizedAction.isBlank()||normalizedAction.equals(log.action)).filter(log->actorOperatorId==null||actorOperatorId.equals(log.actorOperatorId)).map(log->{var source=actors.get(log.actorOperatorId);return new AuditView(log.id,log.actorOperatorId,source==null?"Operador":source.displayName,source==null?null:source.email,log.action,log.entityType,log.entityId,log.summary,log.createdAt);}).toList();return ResponseEntity.ok(result);
     }
-
-    private AdminOperator currentSuperAdmin(Principal principal){
-        if(principal==null)return null;
-        try{return operators.findById(UUID.fromString(principal.getName())).filter(value->value.active&&value.role==AdminRole.SUPER_ADMIN).orElse(null);}
-        catch(IllegalArgumentException ex){return null;}
-    }
-
+    private AdminOperator currentSuperAdmin(Principal principal){if(principal==null)return null;try{return operators.findById(UUID.fromString(principal.getName())).filter(value->value.active&&value.role==AdminRole.SUPER_ADMIN).orElse(null);}catch(IllegalArgumentException ex){return null;}}
+    record ActionView(String action,String label){}
     record AuditView(UUID id,UUID actorOperatorId,String actorDisplayName,String actorEmail,String action,String entityType,String entityId,String summary,Instant createdAt){}
 }
