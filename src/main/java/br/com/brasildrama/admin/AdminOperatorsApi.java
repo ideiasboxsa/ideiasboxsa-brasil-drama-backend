@@ -1,26 +1,35 @@
 package br.com.brasildrama.admin;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.PathVariable;
 
 import java.security.Principal;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/admin/operators")
 class AdminOperatorsApi {
     private final AdminOperatorRepository operators;
+    private final PasswordEncoder passwordEncoder;
+    private final AdminPasswordResetService passwordResetService;
 
-    AdminOperatorsApi(AdminOperatorRepository operators) {
+    AdminOperatorsApi(
+        AdminOperatorRepository operators,
+        PasswordEncoder passwordEncoder,
+        AdminPasswordResetService passwordResetService
+    ) {
         this.operators = operators;
+        this.passwordEncoder = passwordEncoder;
+        this.passwordResetService = passwordResetService;
     }
 
     @GetMapping
@@ -34,6 +43,40 @@ class AdminOperatorsApi {
             .map(this::view)
             .toList();
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping
+    ResponseEntity<?> invite(@RequestBody InviteOperatorRequest request, Principal principal) {
+        var actor = superAdmin(principal);
+        if (actor == null) return ResponseEntity.status(403).build();
+
+        var email = request.email() == null ? "" : request.email().trim().toLowerCase();
+        var displayName = request.displayName() == null ? "" : request.displayName().trim();
+        if (email.isBlank() || !email.contains("@") || displayName.length() < 2 || displayName.length() > 160) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("ADMIN_OPERATOR_INVITE_INVALID"));
+        }
+        if (operators.findByEmailIgnoreCase(email).isPresent()) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("ADMIN_OPERATOR_EMAIL_EXISTS"));
+        }
+
+        final AdminRole role;
+        try {
+            role = AdminRole.valueOf(request.role() == null ? "" : request.role().trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("ADMIN_ROLE_INVALID"));
+        }
+
+        var operator = new AdminOperator();
+        operator.id = UUID.randomUUID();
+        operator.email = email;
+        operator.displayName = displayName;
+        operator.role = role;
+        operator.active = true;
+        operator.passwordHash = passwordEncoder.encode(UUID.randomUUID() + ":INVITE_ONLY");
+        operators.save(operator);
+
+        passwordResetService.request(operator.email);
+        return ResponseEntity.status(201).body(new InviteOperatorResponse(view(operator), "PASSWORD_SETUP_EMAIL_REQUESTED"));
     }
 
     @PutMapping("/{operatorId}")
@@ -87,6 +130,8 @@ class AdminOperatorsApi {
         );
     }
 
+    record InviteOperatorRequest(String email, String displayName, String role) {}
+    record InviteOperatorResponse(OperatorView operator, String onboarding) {}
     record UpdateOperatorRequest(String role, Boolean active) {}
     record ErrorResponse(String code) {}
     record OperatorView(
