@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -55,7 +56,8 @@ class RecommendationApi {
 
         var ranked = new ArrayList<RecommendationItem>();
         for (Candidate candidate : candidates) {
-            double genreAffinity = affinity.getOrDefault(candidate.genre().toLowerCase(Locale.ROOT), 0.0);
+            String normalizedGenre = candidate.genre() == null ? "" : candidate.genre().trim().toLowerCase(Locale.ROOT);
+            double genreAffinity = affinity.getOrDefault(normalizedGenre, 0.0);
             double trend = Math.min(35.0, candidate.plays7d() * 1.2 + candidate.completions7d() * 2.4 + candidate.nextEpisodes7d() * 3.0);
             long ageDays = Math.max(0, ChronoUnit.DAYS.between(candidate.createdAt(), Instant.now()));
             double freshness = Math.max(0.0, 18.0 - Math.min(18.0, ageDays * 0.35));
@@ -67,7 +69,7 @@ class RecommendationApi {
             ));
         }
 
-        ranked.sort(Comparator.comparingDouble(RecommendationItem::score).reversed().thenComparing(RecommendationItem::title));
+        ranked.sort(Comparator.comparingDouble(RecommendationItem::score).reversed().thenComparing(RecommendationItem::title, Comparator.nullsLast(String::compareToIgnoreCase)));
         if (ranked.size() > normalizedLimit) ranked = new ArrayList<>(ranked.subList(0, normalizedLimit));
 
         String strategy = affinity.isEmpty() ? "COLD_START_TRENDING_FRESHNESS" : "AFFINITY_TRENDING_FRESHNESS";
@@ -80,7 +82,12 @@ class RecommendationApi {
         String principalClause = userId != null ? "pe.user_id = ?" : "pe.visitor_id = ?";
         Object principal = userId != null ? userId : visitorId;
         var scores = new HashMap<String, Double>();
-        RowCallbackHandler handler = rs -> scores.put(rs.getString("genre"), Math.max(0.0, rs.getDouble("score")));
+        RowCallbackHandler handler = rs -> {
+            String genre = rs.getString("genre");
+            if (genre != null && !genre.isBlank()) {
+                scores.put(genre, Math.max(0.0, rs.getDouble("score")));
+            }
+        };
         jdbc.query("""
             select lower(d.genre) genre,
                    sum(case pe.event_type
@@ -97,6 +104,8 @@ class RecommendationApi {
             join drama d on d.id = pe.drama_id
             where %s
               and pe.created_at >= now() - interval '60 days'
+              and d.genre is not null
+              and btrim(d.genre) <> ''
             group by lower(d.genre)
             """.formatted(principalClause), handler, principal);
         return scores;
@@ -113,16 +122,19 @@ class RecommendationApi {
             where d.status = 'PUBLISHED'
             group by d.id, d.title, d.genre, d.cover_url, d.created_at
             """,
-            (rs, row) -> new Candidate(
-                rs.getObject("id", UUID.class),
-                rs.getString("title"),
-                rs.getString("genre"),
-                rs.getString("cover_url"),
-                rs.getTimestamp("created_at").toInstant(),
-                rs.getLong("plays_7d"),
-                rs.getLong("completions_7d"),
-                rs.getLong("next_episodes_7d")
-            )
+            (rs, row) -> {
+                Timestamp createdAt = rs.getTimestamp("created_at");
+                return new Candidate(
+                    rs.getObject("id", UUID.class),
+                    rs.getString("title"),
+                    rs.getString("genre"),
+                    rs.getString("cover_url"),
+                    createdAt == null ? Instant.EPOCH : createdAt.toInstant(),
+                    rs.getLong("plays_7d"),
+                    rs.getLong("completions_7d"),
+                    rs.getLong("next_episodes_7d")
+                );
+            }
         );
     }
 
