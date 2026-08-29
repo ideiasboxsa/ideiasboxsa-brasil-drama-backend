@@ -57,3 +57,5 @@ databaseChangeLog:
       file: db/changelog/032-admin-audit-log.yaml
   - include:
       file: db/changelog/033-visitor-identity.yaml
+  - include:
+      file: db/changelog/034-rewarded-ad-episode-unlock.yaml
