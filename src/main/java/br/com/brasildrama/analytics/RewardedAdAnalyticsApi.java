@@ -12,6 +12,8 @@ record RewardedAdAnalyticsResponse(
     long sessionsClaimed,
     long uniqueRewardedUsers,
     long bonusGranted,
+    long bonusClaims,
+    long episodeUnlockClaims,
     double verificationRatePercent,
     double claimRatePercent
 ) {}
@@ -36,7 +38,9 @@ class RewardedAdAnalyticsApi {
             select count(*) sessions_created,
                    count(*) filter (where verified_at is not null) sessions_verified,
                    count(*) filter (where claimed_at is not null) sessions_claimed,
-                   count(distinct user_id) filter (where claimed_at is not null) unique_rewarded_users
+                   count(distinct user_id) filter (where claimed_at is not null) unique_rewarded_users,
+                   count(*) filter (where claimed_at is not null and reward_type = 'BONUS') bonus_claims,
+                   count(*) filter (where claimed_at is not null and reward_type = 'EPISODE_UNLOCK') episode_unlock_claims
               from rewarded_ad_session
              where created_at >= now() - (? * interval '1 day')
             """, normalizedDays);
@@ -60,6 +64,8 @@ class RewardedAdAnalyticsApi {
             claimed,
             value(funnel, "unique_rewarded_users"),
             bonusGranted == null ? 0 : bonusGranted,
+            value(funnel, "bonus_claims"),
+            value(funnel, "episode_unlock_claims"),
             percentage(verified, created),
             percentage(claimed, verified)
         );
