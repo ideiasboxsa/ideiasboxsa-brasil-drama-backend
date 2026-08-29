@@ -59,3 +59,5 @@ databaseChangeLog:
       file: db/changelog/033-visitor-identity.yaml
   - include:
       file: db/changelog/034-rewarded-ad-episode-unlock.yaml
+  - include:
+      file: db/changelog/035-push-devices.yaml
