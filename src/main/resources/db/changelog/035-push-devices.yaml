@@ -1,0 +1,95 @@
+databaseChangeLog:
+  - changeSet:
+      id: 035-push-devices
+      author: brasil-drama
+      context: base
+      changes:
+        - createTable:
+            tableName: push_device
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_push_device_user
+                    references: app_user(id)
+              - column:
+                  name: platform
+                  type: varchar(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: provider
+                  type: varchar(24)
+                  defaultValue: FCM
+                  constraints:
+                    nullable: false
+              - column:
+                  name: token
+                  type: varchar(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: marketing_enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: new_episode_enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reward_enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_seen_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: push_device
+            columnNames: token
+            constraintName: uk_push_device_token
+        - createIndex:
+            tableName: push_device
+            indexName: idx_push_device_user_enabled
+            columns:
+              - column: { name: user_id }
+              - column: { name: enabled }
+        - createIndex:
+            tableName: push_device
+            indexName: idx_push_device_last_seen
+            columns:
+              - column: { name: last_seen_at, descending: true }
