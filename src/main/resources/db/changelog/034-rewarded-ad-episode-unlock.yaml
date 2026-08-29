@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 034-rewarded-ad-episode-unlock
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: rewarded_ad_session
+            columns:
+              - column:
+                  name: reward_type
+                  type: varchar(40)
+                  defaultValue: BONUS
+                  constraints:
+                    nullable: false
+              - column:
+                  name: episode_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_rewarded_ad_session_episode
+                    references: episode(id)
+        - createIndex:
+            tableName: rewarded_ad_session
+            indexName: idx_rewarded_ad_session_episode
+            columns:
+              - column: { name: episode_id }
