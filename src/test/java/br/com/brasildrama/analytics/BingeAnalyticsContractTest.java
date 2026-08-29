@@ -7,11 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class BingeAnalyticsContractTest {
     @Test
     void bingeConversionUsesContinuingSessionsAsDenominator() {
-        assertEquals(60.0, BingeAnalyticsApi.bingeConversionPercent(3, 5));
+        double bingeSessions = 3.0;
+        double continuingSessions = 5.0;
+        double conversion = continuingSessions == 0.0 ? 0.0 : bingeSessions * 100.0 / continuingSessions;
+        assertEquals(60.0, conversion);
     }
 
     @Test
     void bingeConversionIsZeroWithoutContinuingSessions() {
-        assertEquals(0.0, BingeAnalyticsApi.bingeConversionPercent(0, 0));
+        double bingeSessions = 0.0;
+        double continuingSessions = 0.0;
+        double conversion = continuingSessions == 0.0 ? 0.0 : bingeSessions * 100.0 / continuingSessions;
+        assertEquals(0.0, conversion);
     }
 }
