@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.text.Normalizer;
 import java.util.*;
 
 record DramaSummaryDto(String id, String title, String synopsis, String genre, String coverUrl, String backdropUrl) {}
@@ -42,7 +43,10 @@ class CatalogController {
     SearchResponseDto search(@RequestParam("q") String q, @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "0") int offset) {
         int safeLimit = Math.max(1, Math.min(limit, 100));
         int safeOffset = Math.max(0, offset);
-        var query = normalize(q);
+        var rawQuery = q == null ? "" : q.trim();
+        if (rawQuery.length() < 2) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Search query must contain at least 2 characters");
+        if (rawQuery.length() > 80) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Search query is too long");
+        var query = normalize(rawQuery);
         var all = dramas.findByStatusOrderByTitleAsc(DramaStatus.PUBLISHED).stream()
             .filter(d -> matchesSearch(d, query))
             .sorted(
@@ -79,14 +83,12 @@ class CatalogController {
     }
 
     private static boolean matchesSearch(DramaEntity drama, String query) {
-        if (query.isBlank()) return true;
         return normalize(drama.title).contains(query)
             || normalize(drama.genre).contains(query)
             || normalize(drama.synopsis).contains(query);
     }
 
     private static int searchScore(DramaEntity drama, String query) {
-        if (query.isBlank()) return 0;
         String title = normalize(drama.title);
         String genre = normalize(drama.genre);
         String synopsis = normalize(drama.synopsis);
@@ -103,6 +105,10 @@ class CatalogController {
     private DramaSummaryDto summary(DramaEntity d) { return new DramaSummaryDto(d.id.toString(), d.title, d.synopsis, d.genre, posterUrl(d), media.readUrl(d.backdropObjectKey)); }
     private String posterUrl(DramaEntity d) { return d.posterObjectKey == null || d.posterObjectKey.isBlank() ? d.coverUrl : media.readUrl(d.posterObjectKey); }
     private EpisodeDto episode(EpisodeEntity e) { return new EpisodeDto(e.id.toString(), e.number, e.title, e.description, e.durationSeconds, e.coinPrice, e.free, e.videoObjectKey == null || e.videoObjectKey.isBlank() ? e.videoUrl : media.readUrl(e.videoObjectKey)); }
-    private static String normalize(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT); }
+    private static String normalize(String value) {
+        if (value == null) return "";
+        String decomposed = Normalizer.normalize(value, Normalizer.Form.NFD);
+        return decomposed.replaceAll("\\p{M}+", "").trim().toLowerCase(Locale.ROOT);
+    }
     private static String slug(String value) { return normalize(value).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", ""); }
 }
