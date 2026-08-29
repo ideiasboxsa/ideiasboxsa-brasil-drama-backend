@@ -51,10 +51,12 @@ class NextObsessionApi {
         String visitor = normalizeVisitor(visitorId);
         Map<String, Double> affinity = loadGenreAffinity(userId, visitor);
         Set<UUID> recentlyConsumed = loadRecentlyConsumed(userId, visitor);
+        Set<UUID> suppressed = loadSuppressedDramaIds(userId, visitor);
         List<Candidate> candidates = loadCandidates();
 
         var ranked = new ArrayList<NextObsessionItem>();
         for (Candidate candidate : candidates) {
+            if (suppressed.contains(candidate.id())) continue;
             String normalizedGenre = normalizeGenre(candidate.genre());
             double genreAffinity = affinity.getOrDefault(normalizedGenre, 0.0);
             double trend = Math.min(40.0, candidate.plays7d() * 1.1 + candidate.completions7d() * 2.8 + candidate.nextEpisodes7d() * 3.4);
@@ -69,7 +71,7 @@ class NextObsessionApi {
             ));
         }
 
-        ranked.sort(Comparator.comparingDouble(NextObsessionItem::score).reversed().thenComparing(NextObsessionItem::title));
+        ranked.sort(Comparator.comparingDouble(NextObsessionItem::score).reversed().thenComparing(NextObsessionItem::title, Comparator.nullsLast(String::compareToIgnoreCase)));
         NextObsessionItem item = ranked.isEmpty() ? null : ranked.getFirst();
         String strategy = affinity.isEmpty()
             ? "DISCOVERY_TRENDING_FRESHNESS_V1"
@@ -94,6 +96,7 @@ class NextObsessionApi {
                        when 'watch_3s' then 1
                        when 'abandon' then -3
                        when 'skip' then -5
+                       when 'not_interested' then -35
                        else 0 end)::double precision score
             from playback_event pe
             join drama d on d.id = pe.drama_id
@@ -115,6 +118,21 @@ class NextObsessionApi {
             where %s
               and pe.created_at >= now() - interval '21 days'
               and pe.event_type in ('play','watch_3s','progress_25','progress_50','progress_75','completion','next_episode')
+            """.formatted(principalClause), (RowCallbackHandler) rs -> ids.add(rs.getObject("drama_id", UUID.class)), principal);
+        return ids;
+    }
+
+    private Set<UUID> loadSuppressedDramaIds(UUID userId, String visitorId) {
+        if (userId == null && visitorId == null) return Set.of();
+        String principalClause = userId != null ? "pe.user_id = ?" : "pe.visitor_id = ?";
+        Object principal = userId != null ? userId : visitorId;
+        var ids = new HashSet<UUID>();
+        jdbc.query("""
+            select distinct pe.drama_id
+            from playback_event pe
+            where %s
+              and pe.event_type = 'not_interested'
+              and pe.created_at >= now() - interval '90 days'
             """.formatted(principalClause), (RowCallbackHandler) rs -> ids.add(rs.getObject("drama_id", UUID.class)), principal);
         return ids;
     }
