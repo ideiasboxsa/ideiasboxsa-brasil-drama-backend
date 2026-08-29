@@ -23,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 record RewardedAdSessionDto(String operationKey, String expiresAt) {}
+record RewardedEpisodeAdSessionRequest(UUID episodeId) {}
 record RewardedAdClaimDto(
     boolean accepted,
     Long bonusBalance,
@@ -31,6 +32,7 @@ record RewardedAdClaimDto(
     RewardsOverviewDto overview,
     int balance
 ) {}
+record RewardedEpisodeAdClaimDto(boolean accepted, UUID episodeId, boolean unlocked) {}
 
 @RestController
 @RequestMapping("/v1/rewards/ads")
@@ -46,6 +48,12 @@ class RewardedAdController {
         return rewardedAds.createSession(userId(authentication));
     }
 
+    @PostMapping("/episode/session")
+    RewardedAdSessionDto createEpisodeSession(Authentication authentication, @RequestBody RewardedEpisodeAdSessionRequest request) {
+        if (request == null || request.episodeId() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "episodeId is required");
+        return rewardedAds.createEpisodeSession(userId(authentication), request.episodeId());
+    }
+
     @GetMapping("/ssv")
     @ResponseStatus(HttpStatus.OK)
     void ssv(HttpServletRequest request) {
@@ -55,6 +63,11 @@ class RewardedAdController {
     @PostMapping("/claim")
     RewardedAdClaimDto claim(Authentication authentication, @RequestBody RewardsOperationRequest request) {
         return rewardedAds.claim(userId(authentication), operationKey(request));
+    }
+
+    @PostMapping("/episode/claim")
+    RewardedEpisodeAdClaimDto claimEpisode(Authentication authentication, @RequestBody RewardsOperationRequest request) {
+        return rewardedAds.claimEpisode(userId(authentication), operationKey(request));
     }
 
     private static UUID userId(Authentication authentication) {
@@ -104,16 +117,28 @@ class RewardedAdService {
 
     @Transactional
     RewardedAdSessionDto createSession(UUID userId) {
+        return createSession(userId, "BONUS", null);
+    }
+
+    @Transactional
+    RewardedAdSessionDto createEpisodeSession(UUID userId, UUID episodeId) {
+        Integer eligible = jdbc.queryForObject("select count(*) from episode where id=? and free=false", Integer.class, episodeId);
+        if (eligible == null || eligible == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "REWARDED_EPISODE_NOT_ELIGIBLE");
+        Integer alreadyUnlocked = jdbc.queryForObject("select count(*) from episode_entitlement where user_id=? and episode_id=?", Integer.class, userId, episodeId);
+        if (alreadyUnlocked != null && alreadyUnlocked > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "EPISODE_ALREADY_UNLOCKED");
+        return createSession(userId, "EPISODE_UNLOCK", episodeId);
+    }
+
+    private RewardedAdSessionDto createSession(UUID userId, String rewardType, UUID episodeId) {
         lock(userId);
         if (dailyLimit == 0 || claimedToday(userId) >= dailyLimit) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "REWARDED_AD_DAILY_LIMIT_REACHED");
         }
-
         var operationKey = "ad:" + UUID.randomUUID();
         var expiresAt = Instant.now().plus(sessionTtl);
         jdbc.update(
-            "insert into rewarded_ad_session(operation_key,user_id,expires_at,created_at) values (?,?,?,now())",
-            operationKey, userId, Timestamp.from(expiresAt)
+            "insert into rewarded_ad_session(operation_key,user_id,expires_at,reward_type,episode_id,created_at) values (?,?,?,?,?,now())",
+            operationKey, userId, Timestamp.from(expiresAt), rewardType, episodeId
         );
         return new RewardedAdSessionDto(operationKey, expiresAt.toString());
     }
@@ -121,101 +146,86 @@ class RewardedAdService {
     @Transactional
     void verifySsv(HttpServletRequest request) {
         AdMobSsvPayload payload = verifier.verify(request);
-        if (payload.customData() == null || payload.customData().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_CUSTOM_DATA_REQUIRED");
-        }
-        if (!expectedAdUnitId.isBlank() && !expectedAdUnitId.equals(payload.adUnit())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_AD_UNIT_MISMATCH");
-        }
+        if (payload.customData() == null || payload.customData().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_CUSTOM_DATA_REQUIRED");
+        if (!expectedAdUnitId.isBlank() && !expectedAdUnitId.equals(payload.adUnit())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_AD_UNIT_MISMATCH");
 
         var session = jdbc.query(
             "select user_id,expires_at,transaction_id from rewarded_ad_session where operation_key=? for update",
-            (rs, rowNum) -> new AdSession(
-                rs.getObject("user_id", UUID.class),
-                rs.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                rs.getString("transaction_id")
-            ),
+            (rs, rowNum) -> new AdSession(rs.getObject("user_id", UUID.class), rs.getObject("expires_at", OffsetDateTime.class).toInstant(), rs.getString("transaction_id")),
             payload.customData()
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SSV_SESSION_NOT_FOUND"));
-
-        if (session.expiresAt().isBefore(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.GONE, "SSV_SESSION_EXPIRED");
-        }
+        if (session.expiresAt().isBefore(Instant.now())) throw new ResponseStatusException(HttpStatus.GONE, "SSV_SESSION_EXPIRED");
         if (session.transactionId() != null) {
             if (session.transactionId().equals(payload.transactionId())) return;
             throw new ResponseStatusException(HttpStatus.CONFLICT, "SSV_SESSION_ALREADY_VERIFIED");
         }
-
-        Integer transactionExists = jdbc.queryForObject(
-            "select count(*) from rewarded_ad_session where transaction_id=?",
-            Integer.class,
-            payload.transactionId()
-        );
-        if (transactionExists != null && transactionExists > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "SSV_TRANSACTION_ALREADY_USED");
-        }
-
-        jdbc.update(
-            "update rewarded_ad_session set verified_at=now(), transaction_id=? where operation_key=? and transaction_id is null",
-            payload.transactionId(), payload.customData()
-        );
+        Integer transactionExists = jdbc.queryForObject("select count(*) from rewarded_ad_session where transaction_id=?", Integer.class, payload.transactionId());
+        if (transactionExists != null && transactionExists > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "SSV_TRANSACTION_ALREADY_USED");
+        jdbc.update("update rewarded_ad_session set verified_at=now(), transaction_id=? where operation_key=? and transaction_id is null", payload.transactionId(), payload.customData());
     }
 
     @Transactional
     RewardedAdClaimDto claim(UUID userId, String operationKey) {
+        var session = verifiedClaimSession(userId, operationKey, "BONUS");
+        var ledgerOperation = "rewarded-ad:" + operationKey;
+        Integer prior = jdbc.queryForObject("select count(*) from reward_ledger where user_id=? and operation_key=?", Integer.class, userId, ledgerOperation);
+        if (prior == null || prior == 0) {
+            jdbc.update("insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at) values (?,?,?,?,?,?,?,now())",
+                UUID.randomUUID(), userId, "BONUS", ledgerOperation, bonusAmount, "REWARDED_AD", operationKey);
+        }
+        markClaimed(operationKey);
+        return response(session.claimedAt() == null, userId);
+    }
+
+    @Transactional
+    RewardedEpisodeAdClaimDto claimEpisode(UUID userId, String operationKey) {
+        var session = verifiedClaimSession(userId, operationKey, "EPISODE_UNLOCK");
+        if (session.episodeId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "REWARDED_EPISODE_MISSING");
+        if (session.claimedAt() == null) {
+            jdbc.update(
+                "insert into episode_entitlement(user_id,episode_id,source,operation_key,granted_at) values (?,?,?,?,now()) on conflict (user_id,episode_id) do nothing",
+                userId, session.episodeId(), "REWARDED_AD", "rewarded-ad-unlock:" + operationKey
+            );
+            markClaimed(operationKey);
+        }
+        return new RewardedEpisodeAdClaimDto(session.claimedAt() == null, session.episodeId(), true);
+    }
+
+    private ClaimSession verifiedClaimSession(UUID userId, String operationKey, String expectedRewardType) {
         lock(userId);
         var session = jdbc.query(
-            "select user_id,expires_at,verified_at,claimed_at from rewarded_ad_session where operation_key=? for update",
+            "select user_id,expires_at,verified_at,claimed_at,reward_type,episode_id from rewarded_ad_session where operation_key=? for update",
             (rs, rowNum) -> new ClaimSession(
-                rs.getObject("user_id", UUID.class),
-                rs.getObject("expires_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("verified_at", OffsetDateTime.class),
-                rs.getObject("claimed_at", OffsetDateTime.class)
+                rs.getObject("user_id", UUID.class), rs.getObject("expires_at", OffsetDateTime.class).toInstant(),
+                rs.getObject("verified_at", OffsetDateTime.class), rs.getObject("claimed_at", OffsetDateTime.class),
+                rs.getString("reward_type"), rs.getObject("episode_id", UUID.class)
             ), operationKey
         ).stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "REWARDED_AD_SESSION_NOT_FOUND"));
-
         if (!userId.equals(session.userId())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "REWARDED_AD_SESSION_OWNER_MISMATCH");
-        if (session.claimedAt() != null) return response(false, userId);
+        if (!expectedRewardType.equals(session.rewardType())) throw new ResponseStatusException(HttpStatus.CONFLICT, "REWARDED_AD_REWARD_TYPE_MISMATCH");
+        if (session.claimedAt() != null) return session;
         if (session.expiresAt().isBefore(Instant.now())) throw new ResponseStatusException(HttpStatus.GONE, "REWARDED_AD_SESSION_EXPIRED");
         if (session.verifiedAt() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "REWARDED_AD_NOT_VERIFIED");
         if (dailyLimit == 0 || claimedToday(userId) >= dailyLimit) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "REWARDED_AD_DAILY_LIMIT_REACHED");
+        return session;
+    }
 
-        var ledgerOperation = "rewarded-ad:" + operationKey;
-        Integer prior = jdbc.queryForObject(
-            "select count(*) from reward_ledger where user_id=? and operation_key=?",
-            Integer.class, userId, ledgerOperation
-        );
-        if (prior == null || prior == 0) {
-            jdbc.update(
-                "insert into reward_ledger(id,user_id,ledger_type,operation_key,amount,reference_type,reference_id,created_at) values (?,?,?,?,?,?,?,now())",
-                UUID.randomUUID(), userId, "BONUS", ledgerOperation, bonusAmount, "REWARDED_AD", operationKey
-            );
-        }
+    private void markClaimed(String operationKey) {
         jdbc.update("update rewarded_ad_session set claimed_at=now() where operation_key=? and claimed_at is null", operationKey);
-        return response(true, userId);
     }
 
     private RewardedAdClaimDto response(boolean accepted, UUID userId) {
         var overview = rewards.overview(userId);
         long bonus = overview.bonusBalance() == null ? 0 : overview.bonusBalance();
-        return new RewardedAdClaimDto(
-            accepted,
-            overview.bonusBalance(),
-            overview.vipPointsBalance(),
-            null,
-            overview,
-            bonus > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) bonus
-        );
+        return new RewardedAdClaimDto(accepted, overview.bonusBalance(), overview.vipPointsBalance(), null, overview,
+            bonus > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) bonus);
     }
 
     private int claimedToday(UUID userId) {
         var today = LocalDate.now(zoneId);
         var start = today.atStartOfDay(zoneId).toOffsetDateTime();
         var end = today.plusDays(1).atStartOfDay(zoneId).toOffsetDateTime();
-        Integer count = jdbc.queryForObject(
-            "select count(*) from rewarded_ad_session where user_id=? and claimed_at>=? and claimed_at<?",
-            Integer.class, userId, start, end
-        );
+        Integer count = jdbc.queryForObject("select count(*) from rewarded_ad_session where user_id=? and claimed_at>=? and claimed_at<?", Integer.class, userId, start, end);
         return count == null ? 0 : count;
     }
 
@@ -224,7 +234,7 @@ class RewardedAdService {
     }
 
     private record AdSession(UUID userId, Instant expiresAt, String transactionId) {}
-    private record ClaimSession(UUID userId, Instant expiresAt, OffsetDateTime verifiedAt, OffsetDateTime claimedAt) {}
+    private record ClaimSession(UUID userId, Instant expiresAt, OffsetDateTime verifiedAt, OffsetDateTime claimedAt, String rewardType, UUID episodeId) {}
 }
 
 record AdMobSsvPayload(String customData, String transactionId, String adUnit, long timestampMs) {}
@@ -241,9 +251,7 @@ class AdMobSsvVerifier {
     private final Map<Long, PublicKey> cachedKeys = new ConcurrentHashMap<>();
     private volatile Instant keysLoadedAt = Instant.EPOCH;
 
-    AdMobSsvVerifier(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+    AdMobSsvVerifier(ObjectMapper objectMapper) { this.objectMapper = objectMapper; }
 
     AdMobSsvPayload verify(HttpServletRequest request) {
         try {
@@ -251,42 +259,23 @@ class AdMobSsvVerifier {
             if (rawQuery == null || rawQuery.isBlank()) throw new IllegalArgumentException("Missing query string");
             int signatureIndex = rawQuery.indexOf("&signature=");
             if (signatureIndex <= 0) throw new IllegalArgumentException("Missing signature");
-
             var signedContent = rawQuery.substring(0, signatureIndex).getBytes(StandardCharsets.UTF_8);
             var signatureText = required(request, "signature");
             long keyId = Long.parseLong(required(request, "key_id"));
             var publicKey = keys().get(keyId);
-            if (publicKey == null) {
-                refreshKeys();
-                publicKey = cachedKeys.get(keyId);
-            }
+            if (publicKey == null) { refreshKeys(); publicKey = cachedKeys.get(keyId); }
             if (publicKey == null) throw new IllegalArgumentException("Unknown key_id");
-
             var signature = Signature.getInstance("SHA256withECDSA");
             signature.initVerify(publicKey);
             signature.update(signedContent);
-            if (!signature.verify(Base64.getUrlDecoder().decode(padBase64(signatureText)))) {
-                throw new IllegalArgumentException("Invalid SSV signature");
-            }
-
+            if (!signature.verify(Base64.getUrlDecoder().decode(padBase64(signatureText)))) throw new IllegalArgumentException("Invalid SSV signature");
             long timestampMs = Long.parseLong(required(request, "timestamp"));
             var eventTime = Instant.ofEpochMilli(timestampMs);
             var now = Instant.now();
-            if (eventTime.isBefore(now.minus(MAX_EVENT_AGE)) || eventTime.isAfter(now.plus(MAX_FUTURE_SKEW))) {
-                throw new IllegalArgumentException("SSV timestamp outside accepted window");
-            }
-
-            return new AdMobSsvPayload(
-                request.getParameter("custom_data"),
-                required(request, "transaction_id"),
-                required(request, "ad_unit"),
-                timestampMs
-            );
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_ADMOB_SSV", ex);
-        }
+            if (eventTime.isBefore(now.minus(MAX_EVENT_AGE)) || eventTime.isAfter(now.plus(MAX_FUTURE_SKEW))) throw new IllegalArgumentException("SSV timestamp outside accepted window");
+            return new AdMobSsvPayload(request.getParameter("custom_data"), required(request, "transaction_id"), required(request, "ad_unit"), timestampMs);
+        } catch (ResponseStatusException ex) { throw ex; }
+        catch (Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_ADMOB_SSV", ex); }
     }
 
     private Map<Long, PublicKey> keys() throws Exception {
@@ -307,9 +296,7 @@ class AdMobSsvVerifier {
             next.put(keyId, key);
         }
         if (next.isEmpty()) throw new IllegalStateException("No AdMob verification keys");
-        cachedKeys.clear();
-        cachedKeys.putAll(next);
-        keysLoadedAt = Instant.now();
+        cachedKeys.clear(); cachedKeys.putAll(next); keysLoadedAt = Instant.now();
     }
 
     private static String required(HttpServletRequest request, String name) {
