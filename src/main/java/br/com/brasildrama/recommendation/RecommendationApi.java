@@ -14,9 +14,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 record RecommendationItem(
@@ -52,10 +54,12 @@ class RecommendationApi {
         UUID userId = authenticatedUser(authentication);
         String visitor = normalizeVisitor(visitorId);
         Map<String, Double> affinity = loadGenreAffinity(userId, visitor);
+        Set<UUID> suppressed = loadSuppressedDramaIds(userId, visitor);
         List<Candidate> candidates = loadCandidates();
 
         var ranked = new ArrayList<RecommendationItem>();
         for (Candidate candidate : candidates) {
+            if (suppressed.contains(candidate.id())) continue;
             String normalizedGenre = candidate.genre() == null ? "" : candidate.genre().trim().toLowerCase(Locale.ROOT);
             double genreAffinity = affinity.getOrDefault(normalizedGenre, 0.0);
             double trend = Math.min(35.0, candidate.plays7d() * 1.2 + candidate.completions7d() * 2.4 + candidate.nextEpisodes7d() * 3.0);
@@ -99,6 +103,7 @@ class RecommendationApi {
                        when 'watch_3s' then 1
                        when 'abandon' then -3
                        when 'skip' then -5
+                       when 'not_interested' then -30
                        else 0 end)::double precision score
             from playback_event pe
             join drama d on d.id = pe.drama_id
@@ -109,6 +114,21 @@ class RecommendationApi {
             group by lower(d.genre)
             """.formatted(principalClause), handler, principal);
         return scores;
+    }
+
+    private Set<UUID> loadSuppressedDramaIds(UUID userId, String visitorId) {
+        if (userId == null && visitorId == null) return Set.of();
+        String principalClause = userId != null ? "pe.user_id = ?" : "pe.visitor_id = ?";
+        Object principal = userId != null ? userId : visitorId;
+        var ids = new HashSet<UUID>();
+        jdbc.query("""
+            select distinct pe.drama_id
+            from playback_event pe
+            where %s
+              and pe.event_type = 'not_interested'
+              and pe.created_at >= now() - interval '90 days'
+            """.formatted(principalClause), (RowCallbackHandler) rs -> ids.add(rs.getObject("drama_id", UUID.class)), principal);
+        return ids;
     }
 
     private List<Candidate> loadCandidates() {
