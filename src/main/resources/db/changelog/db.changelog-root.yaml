@@ -61,3 +61,5 @@ databaseChangeLog:
       file: db/changelog/034-rewarded-ad-episode-unlock.yaml
   - include:
       file: db/changelog/035-push-devices.yaml
+  - include:
+      file: db/changelog/036-content-analytics.yaml
