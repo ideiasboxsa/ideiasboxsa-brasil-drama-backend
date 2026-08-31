@@ -15,10 +15,18 @@ public class JwtService {
     private final SecretKey key;
     private final Duration ttl;
 
+    /**
+     * O segredo não tem valor padrão de propósito. Havia aqui um default embutido
+     * ("dev-only-change-this-secret-32-bytes") que passava na validação de
+     * comprimento: qualquer deploy sem JWT_SECRET subia com uma chave de
+     * assinatura publicada neste repositório, permitindo forjar token de qualquer
+     * usuário — inclusive administrador. A aplicação agora falha na inicialização.
+     */
     public JwtService(
-        @Value("${security.jwt.secret:${JWT_SECRET:dev-only-change-this-secret-32-bytes}}") String secret,
+        @Value("${security.jwt.secret:${JWT_SECRET:}}") String secret,
         @Value("${security.jwt.ttl:${JWT_TTL:PT24H}}") Duration ttl
     ) {
+        if (secret == null || secret.isBlank()) throw new IllegalStateException("JWT_SECRET_REQUIRED");
         if (secret.getBytes(StandardCharsets.UTF_8).length < 32) throw new IllegalStateException("JWT_SECRET_TOO_SHORT");
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.ttl = ttl;

@@ -25,6 +25,10 @@ services:
       DB_USER: brasil_drama
       DB_PASSWORD: brasil_drama
       LIQUIBASE_CONTEXTS: base,dev
+      # JwtService não tem mais valor padrão: a aplicação falha na inicialização
+      # sem esta variável, por desenho. O valor abaixo serve apenas ao compose
+      # local — em qualquer ambiente remoto o segredo vem do secret manager.
+      JWT_SECRET: ${JWT_SECRET:-local-compose-only-secret-nao-use-fora-daqui}
       REWARDS_WELCOME_ENABLED: "true"
       REWARDS_WELCOME_BONUS: "50"
       REWARDS_ADS_DAILY_LIMIT: "5"

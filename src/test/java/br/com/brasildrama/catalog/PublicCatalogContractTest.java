@@ -10,7 +10,10 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = "spring.liquibase.contexts=dev")
+@SpringBootTest(properties = {
+    "spring.liquibase.contexts=dev",
+    "security.jwt.secret=test-secret-for-brasil-drama-must-have-32-bytes"
+})
 @AutoConfigureMockMvc
 class PublicCatalogContractTest {
     @Autowired MockMvc mvc;

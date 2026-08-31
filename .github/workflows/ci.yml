@@ -31,6 +31,10 @@ jobs:
       DB_URL: jdbc:postgresql://localhost:5432/brasil_drama
       DB_USER: brasil_drama
       DB_PASSWORD: brasil_drama
+      # JwtService falha na inicialização sem segredo (não há mais default
+      # embutido). Cada teste já define security.jwt.secret, que tem precedência;
+      # esta variável é rede de proteção para testes futuros.
+      JWT_SECRET: ci-only-secret-for-brasil-drama-32-bytes-min
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -38,5 +42,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # Usa o wrapper versionado: a versão do Maven passa a ser a mesma do
+      # estágio de build do Dockerfile (3.9.9), em vez da que o runner trouxer.
       - name: Test
-        run: mvn -B verify
+        run: ./mvnw -B verify
