@@ -33,19 +33,22 @@ public class AuthApi {
     private final JwtService jwt;
     private final RewardGrantService rewardGrants;
     private final VisitorMergeService visitorMerges;
+    private final GoogleIdentityVerifier googleIdentities;
 
     public AuthApi(
         UserAccountRepository users,
         PasswordEncoder passwords,
         JwtService jwt,
         RewardGrantService rewardGrants,
-        VisitorMergeService visitorMerges
+        VisitorMergeService visitorMerges,
+        GoogleIdentityVerifier googleIdentities
     ) {
         this.users = users;
         this.passwords = passwords;
         this.jwt = jwt;
         this.rewardGrants = rewardGrants;
         this.visitorMerges = visitorMerges;
+        this.googleIdentities = googleIdentities;
     }
 
     @PostMapping("/v1/auth/register")
@@ -79,9 +82,62 @@ public class AuthApi {
         return response(user, welcomeBonus);
     }
 
+    /**
+     * Login social. Era um stub que devolvia 501 — o app obtinha o ID token pelo
+     * Credential Manager e o enviava, mas o servidor nunca o validava.
+     *
+     * <p>A vinculação procura primeiro pelo {@code sub} do Google, que é estável,
+     * e só depois pelo e-mail. A ordem importa: quem trocar o endereço na conta
+     * Google continua entrando na mesma conta do Brasil Drama em vez de ganhar
+     * uma nova, e a conta criada por e-mail e senha é adotada pelo login social
+     * do mesmo endereço em vez de colidir na restrição de unicidade.
+     *
+     * <p>A vinculação por e-mail só é segura porque
+     * {@link GoogleIdentityVerifier} recusa token sem {@code email_verified}.
+     */
     @PostMapping("/v1/auth/google")
-    LoginResponse google(@Valid @RequestBody GoogleAuthRequest request) {
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "GOOGLE_AUTH_NOT_CONFIGURED");
+    @Transactional
+    public LoginResponse google(
+        @Valid @RequestBody GoogleAuthRequest request,
+        @RequestHeader(value = VisitorIdentity.HEADER, required = false) String visitorId
+    ) {
+        var identity = googleIdentities.verify(request.idToken());
+
+        var user = users.findByGoogleSubject(identity.subject())
+            .or(() -> users.findByEmailIgnoreCase(identity.email()))
+            .orElse(null);
+
+        boolean isNewAccount = user == null;
+        if (isNewAccount) {
+            user = new UserAccount(
+                UUID.randomUUID(),
+                identity.email(),
+                displayNameFor(identity),
+                // Sem senha: a conta passa a existir apenas via Google até que o
+                // usuário defina uma. login() já trata passwordHash nulo como
+                // credencial inválida, então não há caminho de entrada aberto.
+                null
+            );
+        }
+
+        // Adota a conta pré-existente criada por e-mail e senha.
+        user.googleSubject = identity.subject();
+        if (user.displayName == null || user.displayName.isBlank()) {
+            user.displayName = displayNameFor(identity);
+        }
+        users.saveAndFlush(user);
+
+        visitorMerges.merge(visitorId, user.id);
+        long welcomeBonus = rewardGrants.grantWelcomeBonus(user.id);
+        return response(user, welcomeBonus);
+    }
+
+    private static String displayNameFor(GoogleIdentityVerifier.GoogleIdentity identity) {
+        if (identity.displayName() != null && !identity.displayName().isBlank()) {
+            return identity.displayName().trim();
+        }
+        int at = identity.email().indexOf('@');
+        return at > 0 ? identity.email().substring(0, at) : identity.email();
     }
 
     @PostMapping("/v1/auth/password/forgot")

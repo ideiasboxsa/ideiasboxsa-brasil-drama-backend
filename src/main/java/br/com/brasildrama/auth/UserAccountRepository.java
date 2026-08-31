@@ -6,4 +6,5 @@ import java.util.*;
 interface UserAccountRepository extends JpaRepository<UserAccount, UUID> {
     Optional<UserAccount> findByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCase(String email);
+    Optional<UserAccount> findByGoogleSubject(String googleSubject);
 }

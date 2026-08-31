@@ -38,8 +38,8 @@ Data: 2026-08-31 · Inventário item a item, com evidência
 | Recompensas do visitante | ✅ | `GuestRewardsScreen.kt` |
 | Paywall | ✅ | `PaywallScreen.kt` |
 | Login e cadastro | ✅ | |
-| Entrar com Google | ✅ | Credential Manager 1.6.0 |
-| Recuperação de senha | ✅ | Deep link |
+| Entrar com Google | ⚠️ | **Correção 2026-08-31:** backend era stub 501. Implementado no épico RC1-B; falta criar o OAuth Client no GCP — ver [doc 08](08-GOOGLE-LOGIN-SOCIAL-GUIA.md) |
+| Recuperação de senha | ❌ 🔒 | **Correção 2026-08-31:** `/v1/auth/password/forgot` e `/reset` são stubs 501 verificados no DEV em execução. Nunca funcionou |
 | Chamados de suporte | ✅ | 5 endpoints |
 | Deep links | ⚠️ | `autoVerify` declarado; **`assetlinks.json` ausente** no domínio |
 | **Exclusão de conta** | ❌ 🔒 | Nenhuma ocorrência em `app/src/main` |
@@ -112,7 +112,7 @@ Data: 2026-08-31 · Inventário item a item, com evidência
 | **Rollback de migração** | ❌ | Nenhum changeset define |
 | Armazenamento S3 | ✅ | Presign, multipart, validação server-side |
 | **CDN para mídia** | ❌ 🔒 | S3 direto — custo e desempenho |
-| Verificação Google Play | ✅ | Android Publisher v3, real |
+| Verificação Google Play | ⚠️ 🔒 | Código correto, mas **sem credencial configurada em DEV**: `google.play.service-account-json-base64` não existe no SSM nem no ambiente, então toda compra devolve 503. Verificado em 2026-08-31 |
 | **Acknowledge no servidor** | ❌ | Só no cliente, sem retentativa (F-01) |
 | Verificação SSV AdMob | ✅ | ECDSA contra chaves do Google |
 | Dispatcher FCM | ✅ | HTTP v1 |

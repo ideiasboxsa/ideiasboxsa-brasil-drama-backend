@@ -19,6 +19,15 @@ class UserAccount {
     @Column(name = "password_hash", length = 100)
     String passwordHash;
 
+    /**
+     * Claim {@code sub} do Google: identificador estável da conta, imune a troca
+     * de e-mail. A busca no login social é por ele primeiro e só depois por
+     * e-mail, para que quem trocar o endereço no Google continue entrando na
+     * mesma conta em vez de ganhar uma nova.
+     */
+    @Column(name = "google_subject", length = 64, unique = true)
+    String googleSubject;
+
     @Column(nullable = false)
     boolean autoplay = true;
 

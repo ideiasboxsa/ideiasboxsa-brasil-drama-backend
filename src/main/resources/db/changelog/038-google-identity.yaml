@@ -1,0 +1,29 @@
+databaseChangeLog:
+  # Login social. O endpoint /v1/auth/google era um stub 501: o app já obtinha o
+  # ID token pelo Credential Manager e o enviava, mas o servidor nunca validava.
+  #
+  # O claim `sub` do Google é o identificador estável da conta — imune a troca de
+  # e-mail. Guardá-lo permite que quem mudar o endereço no Google continue
+  # entrando na mesma conta, em vez de ganhar uma nova.
+  - changeSet:
+      id: 038-app-user-google-subject
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: app_user
+            columns:
+              - column:
+                  name: google_subject
+                  type: varchar(64)
+        - addUniqueConstraint:
+            tableName: app_user
+            columnNames: google_subject
+            constraintName: uk_app_user_google_subject
+      rollback:
+        - dropUniqueConstraint:
+            tableName: app_user
+            constraintName: uk_app_user_google_subject
+        - dropColumn:
+            tableName: app_user
+            columnName: google_subject

@@ -20,6 +20,18 @@ security:
     secret: ${JWT_SECRET}
     ttl: ${JWT_TTL:PT24H}
 
+google:
+  oauth:
+    # Client ID do tipo *Web application* do projeto GCP brasil-drama. É o mesmo
+    # valor que o app passa ao GetSignInWithGoogleOption como serverClientId, e é
+    # a audiência esperada no ID token. Sem ele /v1/auth/google devolve 501.
+    web-client-id: ${GOOGLE_WEB_CLIENT_ID:}
+  play:
+    # Service account com acesso à Android Publisher API, em base64. Sem ele a
+    # verificação de compra devolve 503 e nenhuma compra é liquidada.
+    service-account-json-base64: ${GOOGLE_PLAY_SERVICE_ACCOUNT_B64:}
+    package-name: ${GOOGLE_PLAY_PACKAGE_NAME:br.com.brasildrama.app}
+
 admin:
   password-reset:
     ttl: ${ADMIN_PASSWORD_RESET_TTL:PT30M}
