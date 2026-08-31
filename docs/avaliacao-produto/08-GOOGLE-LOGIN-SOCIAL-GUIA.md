@@ -95,6 +95,42 @@ Google precisa conhecer.
 
 ---
 
+## ✅ Estado após a configuração (2026-08-31)
+
+Lido da Firebase Management API, não de arquivo:
+
+```
+SHA-1 cadastrado : e4114e9310763a7c58875aecf609787f0440b072   ✅ confere com a chave de DEV
+OAuth clients    : 2
+
+  Android : 578932710818-5n9a739eh5ur84su7lute2vqol7ctpap.apps.googleusercontent.com
+  WEB     : 578932710818-60p2ku0akfmuc2eijtgf3nfo17tskv82.apps.googleusercontent.com
+```
+
+**O client ID Web é `578932710818-60p2ku0akfmuc2eijtgf3nfo17tskv82.apps.googleusercontent.com`.**
+É este o `GOOGLE_WEB_CLIENT_ID` — nos dois lados, app e backend.
+
+Já gravado no SSM como `String` (não é segredo — vai embutido no APK):
+
+```
+/brasil-drama/dev/google/web_client_id   versão 1
+```
+
+Não é preciso o `google-services.json`: o app não usa o plugin `google-services`
+e monta o `FirebaseOptions` a partir do BuildConfig, em
+`PushTokenRegistrar.ensureFirebase()`.
+
+### Falta fazer
+
+| # | Ação | Quem |
+|---|---|---|
+| 1 | `gh secret set GOOGLE_WEB_CLIENT_ID` no repo do Android | você — não tenho `gh` aqui |
+| 2 | `GOOGLE_WEB_CLIENT_ID` no ambiente do EC2 + restart do serviço | você |
+| 3 | Gerar APK novo (o Secret entra em build time) | workflow |
+| 4 | Service account da Play → destrava a compra (503 hoje) | você |
+
+---
+
 ## A tela do Firebase Authentication: o que preencher
 
 Consultado em 2026-08-31 pela Firebase Management API, com o service account do SSM:
