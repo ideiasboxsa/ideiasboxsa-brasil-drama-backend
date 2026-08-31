@@ -93,7 +93,7 @@ class MonetizationCatalogApi {
 
     @PutMapping("/v1/admin/monetization/catalog/{productId}")
     @Transactional
-    ResponseEntity<?> update(
+    public ResponseEntity<?> update(
         @PathVariable String productId,
         @Valid @RequestBody CommercialProductUpdate request
     ) {

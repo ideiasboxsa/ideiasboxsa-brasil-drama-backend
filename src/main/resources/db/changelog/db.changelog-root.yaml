@@ -63,3 +63,5 @@ databaseChangeLog:
       file: db/changelog/035-push-devices.yaml
   - include:
       file: db/changelog/036-content-analytics.yaml
+  - include:
+      file: db/changelog/037-google-purchase-acknowledge-retry.yaml

@@ -27,6 +27,15 @@ management:
       probes:
         enabled: true
 brasil-drama:
+  # Limite de taxa por IP nos endpoints públicos. Contagem em memória, por
+  # instância: com N instâncias o limite efetivo é N vezes o configurado.
+  # Protege contra abuso trivial e cliente defeituoso, não contra ataque
+  # distribuído — para esse caso, WAF na borda.
+  rate-limit:
+    auth-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:10}
+    register-per-hour: ${RATE_LIMIT_REGISTER_PER_HOUR:5}
+    password-reset-per-hour: ${RATE_LIMIT_PASSWORD_RESET_PER_HOUR:5}
+    telemetry-per-minute: ${RATE_LIMIT_TELEMETRY_PER_MINUTE:120}
   media:
     bucket: ${MEDIA_BUCKET:brasil-drama-dev-media}
     region: ${AWS_REGION:us-east-1}

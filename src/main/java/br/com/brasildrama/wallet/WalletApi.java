@@ -46,7 +46,7 @@ class WalletService {
     }
 
     @Transactional
-    UnlockResponse unlock(UUID userId, UUID episodeId, String operationKey) {
+    public UnlockResponse unlock(UUID userId, UUID episodeId, String operationKey) {
         if (operationKey == null || operationKey.isBlank() || operationKey.length() > 160) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "operationKey inválido");
         }

@@ -1,0 +1,35 @@
+databaseChangeLog:
+  # A Google reembolsa automaticamente compras não confirmadas em 3 dias.
+  # Até aqui só o hash do purchaseToken era persistido, o que tornava impossível
+  # reconfirmar depois: se a confirmação falhasse no momento da compra, a receita
+  # era estornada em silêncio.
+  #
+  # O token passa a ser guardado apenas enquanto a confirmação estiver pendente
+  # e é apagado assim que ela ocorre, limitando a janela de exposição. A chave
+  # primária continua sendo o hash.
+  - changeSet:
+      id: 037-google-purchase-token-for-retry
+      author: brasil-drama
+      context: base
+      changes:
+        - addColumn:
+            tableName: google_play_purchase
+            columns:
+              - column:
+                  name: purchase_token
+                  type: varchar(4096)
+        - createIndex:
+            tableName: google_play_purchase
+            indexName: ix_google_play_purchase_pending_ack
+            columns:
+              - column:
+                  name: acknowledged
+              - column:
+                  name: created_at
+      rollback:
+        - dropIndex:
+            tableName: google_play_purchase
+            indexName: ix_google_play_purchase_pending_ack
+        - dropColumn:
+            tableName: google_play_purchase
+            columnName: purchase_token

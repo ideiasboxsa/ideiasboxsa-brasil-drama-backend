@@ -88,7 +88,7 @@ class RewardsService {
     }
 
     @Transactional
-    RewardsOperationResultDto checkIn(UUID userId, String operationKey) {
+    public RewardsOperationResultDto checkIn(UUID userId, String operationKey) {
         lock(userId);
         var today = LocalDate.now(rewardsZone);
 
@@ -127,7 +127,7 @@ class RewardsService {
     }
 
     @Transactional
-    RewardsOperationResultDto claimMission(UUID userId, String missionId, String operationKey) {
+    public RewardsOperationResultDto claimMission(UUID userId, String missionId, String operationKey) {
         if (missionId == null || missionId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missionId is required");
         lock(userId);
 
@@ -158,7 +158,7 @@ class RewardsService {
     }
 
     @Transactional
-    RewardsOperationResultDto redeemVip(UUID userId, String optionId, String operationKey) {
+    public RewardsOperationResultDto redeemVip(UUID userId, String optionId, String operationKey) {
         if (optionId == null || optionId.isBlank() || optionId.length() > 80) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "optionId is required");
         }

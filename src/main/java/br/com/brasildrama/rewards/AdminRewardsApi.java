@@ -161,7 +161,7 @@ class AdminRewardsApi {
 
     @PutMapping("/check-in/cycle")
     @Transactional
-    List<AdminCheckInDay> updateCheckInCycle(@RequestBody AdminCheckInCycleUpdate request) {
+    public List<AdminCheckInDay> updateCheckInCycle(@RequestBody AdminCheckInCycleUpdate request) {
         if (request == null || request.days() == null || request.days().size() < 2 || request.days().size() > 14) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Check-in cycle must have between 2 and 14 days");
         }

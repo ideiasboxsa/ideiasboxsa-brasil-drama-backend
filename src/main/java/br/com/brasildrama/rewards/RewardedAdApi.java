@@ -116,12 +116,12 @@ class RewardedAdService {
     }
 
     @Transactional
-    RewardedAdSessionDto createSession(UUID userId) {
+    public RewardedAdSessionDto createSession(UUID userId) {
         return createSession(userId, "BONUS", null);
     }
 
     @Transactional
-    RewardedAdSessionDto createEpisodeSession(UUID userId, UUID episodeId) {
+    public RewardedAdSessionDto createEpisodeSession(UUID userId, UUID episodeId) {
         Integer eligible = jdbc.queryForObject("select count(*) from episode where id=? and free=false", Integer.class, episodeId);
         if (eligible == null || eligible == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "REWARDED_EPISODE_NOT_ELIGIBLE");
         Integer alreadyUnlocked = jdbc.queryForObject("select count(*) from episode_entitlement where user_id=? and episode_id=?", Integer.class, userId, episodeId);
@@ -144,7 +144,7 @@ class RewardedAdService {
     }
 
     @Transactional
-    void verifySsv(HttpServletRequest request) {
+    public void verifySsv(HttpServletRequest request) {
         AdMobSsvPayload payload = verifier.verify(request);
         if (payload.customData() == null || payload.customData().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_CUSTOM_DATA_REQUIRED");
         if (!expectedAdUnitId.isBlank() && !expectedAdUnitId.equals(payload.adUnit())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SSV_AD_UNIT_MISMATCH");
@@ -165,7 +165,7 @@ class RewardedAdService {
     }
 
     @Transactional
-    RewardedAdClaimDto claim(UUID userId, String operationKey) {
+    public RewardedAdClaimDto claim(UUID userId, String operationKey) {
         var session = verifiedClaimSession(userId, operationKey, "BONUS");
         var ledgerOperation = "rewarded-ad:" + operationKey;
         Integer prior = jdbc.queryForObject("select count(*) from reward_ledger where user_id=? and operation_key=?", Integer.class, userId, ledgerOperation);
@@ -178,7 +178,7 @@ class RewardedAdService {
     }
 
     @Transactional
-    RewardedEpisodeAdClaimDto claimEpisode(UUID userId, String operationKey) {
+    public RewardedEpisodeAdClaimDto claimEpisode(UUID userId, String operationKey) {
         var session = verifiedClaimSession(userId, operationKey, "EPISODE_UNLOCK");
         if (session.episodeId() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "REWARDED_EPISODE_MISSING");
         if (session.claimedAt() == null) {
