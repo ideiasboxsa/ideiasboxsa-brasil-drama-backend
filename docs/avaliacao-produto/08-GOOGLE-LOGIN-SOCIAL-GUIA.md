@@ -95,6 +95,58 @@ Google precisa conhecer.
 
 ---
 
+## A tela do Firebase Authentication: o que preencher
+
+Consultado em 2026-08-31 pela Firebase Management API, com o service account do SSM:
+
+```
+projectId       : brasil-drama
+projectNumber   : 578932710818
+Apps Android    : 1 → "Brasil Drama Android DEV" (br.com.brasildrama.app.dev)
+SHA cadastrados : NENHUM   (resposta {} do endpoint /sha)
+hml e prod      : não registrados
+```
+
+### A resposta curta: você não precisa dessa tela
+
+**O app não usa Firebase Authentication.** A dependência é só
+`com.google.firebase:firebase-messaging` — não há `firebase-auth`. O fluxo é
+Credential Manager → ID token → seu backend → seu próprio JWT. Firebase Auth é um
+produto paralelo que este app não consome.
+
+**Mas ela serve de atalho legítimo:** ativar o provedor Google ali faz o Firebase
+criar automaticamente os OAuth clients no projeto GCP — que é exatamente o que
+falta. Menos cliques que criar à mão.
+
+### Campo a campo
+
+| Campo na tela | O que fazer |
+|---|---|
+| *"É preciso fornecer a impressão digital SHA-1... Configurações do projeto > Seus apps"* | **Único item obrigatório.** Hoje há zero SHA cadastrado. Adicione o SHA-1 abaixo no app DEV |
+| *"Adicionar IDs de cliente à lista de permissões usando projetos externos (opcional)"* | **Deixe vazio.** Serve para aceitar tokens emitidos a clients de *outro* projeto GCP. Não é o caso |
+| *"ID do cliente da Web"* | **Preenche sozinho ao ativar.** É este valor que você copia — é o `GOOGLE_WEB_CLIENT_ID` |
+| *"Chave secreta do cliente da Web"* | **Ignore. Nunca coloque no app.** Serve para troca de authorization code server-side, fluxo que não usamos. Vazar isso em APK é incidente de segurança |
+
+### Ordem correta
+
+1. **Configurações do projeto › Seus apps › Brasil Drama Android DEV › Adicionar
+   impressão digital** →
+   `E4:11:4E:93:10:76:3A:7C:58:87:5A:EC:F6:09:78:7F:04:40:B0:72`
+2. Voltar em **Authentication › Sign-in method › Google › Ativar**
+3. Copiar o **ID do cliente da Web** que aparecer
+4. Seguir para a seção *"Depois de obter os valores"* abaixo
+
+Registrar o SHA-1 no Firebase cria, no projeto GCP por trás, o OAuth client do
+tipo Android para `br.com.brasildrama.app.dev`. Sem ele o diálogo do Google abre
+e fecha sem devolver token.
+
+> **hml e prod não existem no Firebase.** Só o app DEV está registrado, o que
+> confirma o achado do dossiê de que os flavors `hml` e `prod` têm configuração
+> Firebase vazia. Cada um precisa do seu próprio app registrado, com o SHA-1
+> correspondente — para prod, o de release, que ainda não existe (épico RC1-F).
+
+---
+
 ## O que só você pode fazer
 
 Não tenho acesso ao Google Cloud Console nem ao Play Console. Os passos abaixo
