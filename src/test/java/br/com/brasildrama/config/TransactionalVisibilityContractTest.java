@@ -37,7 +37,7 @@ class TransactionalVisibilityContractTest {
      * nunca funcionou muda comportamento de rollback e precisa de rede antes.
      */
     private static final List<String> AUDITED = List.of(
-        "wallet", "rewards", "monetization"
+        "wallet", "rewards", "monetization", "catalog", "media"
     );
 
     @Test
