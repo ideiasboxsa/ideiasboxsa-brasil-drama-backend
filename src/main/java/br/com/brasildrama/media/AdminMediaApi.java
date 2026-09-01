@@ -63,11 +63,27 @@ class AdminMediaApi {
         try {
             var parts = request.parts().stream().map(p -> new MediaStorageService.UploadedPart(p.partNumber(), p.eTag())).toList();
             var video = storage.completeEpisodeVideo(dramaId, episodeId, request.uploadId(), request.objectKey(), parts);
-            catalog.attachEpisodeVideo(dramaId, episodeId, video.objectKey());
+            var replacedObjectKey = catalog.attachEpisodeVideo(dramaId, episodeId, video.objectKey());
+            // Só depois do commit do vínculo: trocar o MP4 deixava o objeto anterior
+            // no bucket sem referência, cobrado indefinidamente.
+            storage.deleteObject(replacedObjectKey);
             return ResponseEntity.ok(video);
         } catch (IllegalArgumentException ex) {
             return badRequest(ex);
         }
+    }
+
+    /**
+     * Retira o vídeo do episódio, devolvendo-o a "vídeo pendente". Antes só existia
+     * troca: um MP4 defeituoso não podia ser removido, e como a publicação exige
+     * vídeo em todos os episódios, um arquivo ruim segurava a série inteira.
+     */
+    @DeleteMapping("/dramas/{dramaId}/episodes/{episodeId}/video")
+    ResponseEntity<?> deleteVideo(@PathVariable UUID dramaId, @PathVariable UUID episodeId) {
+        if (!catalog.episodeBelongsToDrama(dramaId, episodeId)) return ResponseEntity.notFound().build();
+        var removedObjectKey = catalog.detachEpisodeVideo(dramaId, episodeId);
+        storage.deleteObject(removedObjectKey);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/dramas/{dramaId}/episodes/{episodeId}/video/abort")

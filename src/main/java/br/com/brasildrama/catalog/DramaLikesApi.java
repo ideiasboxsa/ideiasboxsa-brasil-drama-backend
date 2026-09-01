@@ -33,7 +33,7 @@ class DramaLikesApi {
 
     @PutMapping
     @Transactional
-    DramaLikeDto like(
+    public DramaLikeDto like(
         @PathVariable UUID dramaId,
         Authentication authentication,
         @RequestHeader(value = "X-Visitor-ID", required = false) String visitorId
@@ -56,7 +56,7 @@ class DramaLikesApi {
 
     @DeleteMapping
     @Transactional
-    DramaLikeDto unlike(
+    public DramaLikeDto unlike(
         @PathVariable UUID dramaId,
         Authentication authentication,
         @RequestHeader(value = "X-Visitor-ID", required = false) String visitorId

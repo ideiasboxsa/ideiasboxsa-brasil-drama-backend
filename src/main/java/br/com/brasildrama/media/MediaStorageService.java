@@ -1,7 +1,10 @@
 package br.com.brasildrama.media;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
@@ -13,8 +16,14 @@ import java.util.*;
 
 @Service
 public class MediaStorageService implements AutoCloseable {
+    private static final Logger LOG = LoggerFactory.getLogger(MediaStorageService.class);
+
+    /** Piso do multipart do S3: toda parte que não seja a última precisa ter 5 MiB. */
+    private static final long MINIMUM_PART_BYTES = 5L * 1024 * 1024;
+
     private final String bucket;
     private final Duration uploadSignatureDuration;
+    private final Duration videoUploadSignatureDuration;
     private final Duration readSignatureDuration;
     private final long maxImageBytes;
     private final long videoPartBytes;
@@ -26,16 +35,23 @@ public class MediaStorageService implements AutoCloseable {
         @Value("${brasil-drama.media.bucket}") String bucket,
         @Value("${brasil-drama.media.region}") String region,
         @Value("${brasil-drama.media.presign-minutes:15}") long presignMinutes,
+        @Value("${brasil-drama.media.video-presign-minutes:240}") long videoPresignMinutes,
         @Value("${brasil-drama.media.read-presign-minutes:60}") long readPresignMinutes,
         @Value("${brasil-drama.media.max-image-bytes:15728640}") long maxImageBytes,
-        @Value("${brasil-drama.media.video-part-bytes:10485760}") long videoPartBytes,
+        @Value("${brasil-drama.media.video-part-bytes:16777216}") long videoPartBytes,
         @Value("${brasil-drama.media.max-video-bytes:2147483648}") long maxVideoBytes
     ) {
         this.bucket = bucket;
         this.uploadSignatureDuration = Duration.ofMinutes(presignMinutes);
+        // As URLs de parte são assinadas de uma vez, no início do upload, e a última
+        // só é usada quando todas as anteriores terminaram. Com os 15 min herdados do
+        // presign de imagem, um MP4 grande em link doméstico expirava no meio: o
+        // Studio abortava o multipart e mostrava erro genérico, sem nada no log do
+        // servidor. O TTL de vídeo é dimensionado pelo tempo real de transferência.
+        this.videoUploadSignatureDuration = Duration.ofMinutes(videoPresignMinutes);
         this.readSignatureDuration = Duration.ofMinutes(readPresignMinutes);
         this.maxImageBytes = maxImageBytes;
-        this.videoPartBytes = Math.max(5L * 1024 * 1024, videoPartBytes);
+        this.videoPartBytes = Math.max(MINIMUM_PART_BYTES, videoPartBytes);
         this.maxVideoBytes = maxVideoBytes;
         var awsRegion = Region.of(region);
         this.presigner = S3Presigner.builder().region(awsRegion).build();
@@ -75,10 +91,10 @@ public class MediaStorageService implements AutoCloseable {
         var parts = new ArrayList<PresignedPart>();
         for (int number = 1; number <= partCount; number++) {
             var request = UploadPartRequest.builder().bucket(bucket).key(objectKey).uploadId(create.uploadId()).partNumber(number).build();
-            var signed = presigner.presignUploadPart(UploadPartPresignRequest.builder().signatureDuration(uploadSignatureDuration).uploadPartRequest(request).build());
+            var signed = presigner.presignUploadPart(UploadPartPresignRequest.builder().signatureDuration(videoUploadSignatureDuration).uploadPartRequest(request).build());
             parts.add(new PresignedPart(number, signed.url().toString()));
         }
-        return new MultipartUpload(create.uploadId(), objectKey, videoPartBytes, fileSize, parts, uploadSignatureDuration.toSeconds());
+        return new MultipartUpload(create.uploadId(), objectKey, videoPartBytes, fileSize, parts, videoUploadSignatureDuration.toSeconds());
     }
 
     public StoredVideo completeEpisodeVideo(UUID dramaId, UUID episodeId, String uploadId, String objectKey, List<UploadedPart> parts) {
@@ -86,8 +102,16 @@ public class MediaStorageService implements AutoCloseable {
         if (uploadId == null || uploadId.isBlank() || parts == null || parts.isEmpty()) throw new IllegalArgumentException("Multipart upload data is incomplete");
         var completed = parts.stream().sorted(Comparator.comparingInt(UploadedPart::partNumber))
             .map(p -> CompletedPart.builder().partNumber(p.partNumber()).eTag(p.eTag()).build()).toList();
-        s3.completeMultipartUpload(CompleteMultipartUploadRequest.builder().bucket(bucket).key(objectKey).uploadId(uploadId)
-            .multipartUpload(CompletedMultipartUpload.builder().parts(completed).build()).build());
+        try {
+            s3.completeMultipartUpload(CompleteMultipartUploadRequest.builder().bucket(bucket).key(objectKey).uploadId(uploadId)
+                .multipartUpload(CompletedMultipartUpload.builder().parts(completed).build()).build());
+        } catch (S3Exception exception) {
+            // Parte faltando, ETag divergente ou upload já abortado. Sem este bloco o
+            // erro vazava como 500 e o multipart ficava pendente no bucket — cobrado
+            // como armazenamento para sempre, porque não há regra de ciclo de vida.
+            abortQuietly(objectKey, uploadId);
+            throw new IllegalArgumentException("Multipart upload could not be completed");
+        }
         var head = s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(objectKey).build());
         if (head.contentLength() == null || head.contentLength() <= 0 || head.contentLength() > maxVideoBytes) throw new IllegalArgumentException("Uploaded video size is invalid");
         return new StoredVideo(objectKey, head.contentType(), head.contentLength(), readUrl(objectKey));
@@ -96,6 +120,51 @@ public class MediaStorageService implements AutoCloseable {
     public void abortEpisodeVideo(UUID dramaId, UUID episodeId, String uploadId, String objectKey) {
         validateVideoObjectKey(dramaId, episodeId, objectKey);
         s3.abortMultipartUpload(AbortMultipartUploadRequest.builder().bucket(bucket).key(objectKey).uploadId(uploadId).build());
+    }
+
+    /**
+     * Apaga uma chave específica. Usado quando o vídeo de um episódio é substituído:
+     * antes disto o objeto anterior ficava no bucket sem nada apontando para ele.
+     *
+     * <p>Falha de S3 é registrada e engolida de propósito. Quem chama já confirmou a
+     * transação do banco; transformar um erro de limpeza em erro de requisição faria
+     * o operador ver falha numa operação que, do ponto de vista do catálogo, deu
+     * certo. O custo de errar para este lado é um objeto órfão barato.
+     */
+    public void deleteObject(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) return;
+        try {
+            s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(objectKey).build());
+        } catch (SdkException exception) {
+            LOG.warn("Objeto de mídia {} não pôde ser apagado; ficou órfão no bucket", objectKey, exception);
+        }
+    }
+
+    /**
+     * Apaga tudo sob o prefixo de vídeo do episódio, não apenas a chave corrente:
+     * um episódio pode ter acumulado objetos de trocas anteriores ao ciclo de vida
+     * ser corrigido, e todos morrem com ele.
+     */
+    public void deleteEpisodeVideos(UUID dramaId, UUID episodeId) {
+        var prefix = "dramas/%s/episodes/%s/video/".formatted(dramaId, episodeId);
+        try {
+            // Sem paginação: o prefixo é de um único episódio e a página do S3 são
+            // 1000 chaves. Se um episódio chegar a isso, o problema não é a listagem.
+            var listed = s3.listObjectsV2(ListObjectsV2Request.builder().bucket(bucket).prefix(prefix).build());
+            for (var object : listed.contents()) {
+                s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(object.key()).build());
+            }
+        } catch (SdkException exception) {
+            LOG.warn("Objetos sob {} não puderam ser apagados; ficaram órfãos no bucket", prefix, exception);
+        }
+    }
+
+    private void abortQuietly(String objectKey, String uploadId) {
+        try {
+            s3.abortMultipartUpload(AbortMultipartUploadRequest.builder().bucket(bucket).key(objectKey).uploadId(uploadId).build());
+        } catch (SdkException exception) {
+            LOG.warn("Multipart {} de {} não pôde ser abortado; segue pendente no bucket", uploadId, objectKey, exception);
+        }
     }
 
     public String readUrl(String objectKey) {

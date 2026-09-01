@@ -4,6 +4,7 @@ import br.com.brasildrama.media.MediaStorageService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -34,11 +35,38 @@ public class DramaCatalogAccess {
         dramas.save(drama);
     }
 
+    /**
+     * Vincula o objeto ao episódio e devolve a chave que estava lá antes, ou
+     * {@code null} se não havia nenhuma.
+     *
+     * <p>O retorno existe porque quem chama precisa apagar o objeto substituído.
+     * Antes disto, trocar o MP4 de um episódio deixava o anterior no bucket sem
+     * referência alguma — comprovado em DEV com dois objetos e só o último ligado
+     * ao episódio. A remoção acontece depois do commit, nunca aqui dentro: se o
+     * S3 falhasse dentro da transação, o rollback devolveria o episódio à chave
+     * antiga já apagada.
+     */
     @Transactional
-    public void attachEpisodeVideo(UUID dramaId, UUID episodeId, String objectKey) {
+    public String attachEpisodeVideo(UUID dramaId, UUID episodeId, String objectKey) {
         var episode = episodes.findById(episodeId).filter(e -> e.dramaId.equals(dramaId)).orElseThrow();
+        var previousObjectKey = episode.videoObjectKey;
         episode.videoObjectKey = objectKey;
         episode.videoUrl = null;
         episodes.save(episode);
+        return Objects.equals(previousObjectKey, objectKey) ? null : previousObjectKey;
+    }
+
+    /**
+     * Desfaz o vínculo do vídeo, devolvendo o episódio ao estado "vídeo pendente".
+     * Sem isto não havia como retirar um MP4 defeituoso: só trocá-lo por outro.
+     */
+    @Transactional
+    public String detachEpisodeVideo(UUID dramaId, UUID episodeId) {
+        var episode = episodes.findById(episodeId).filter(e -> e.dramaId.equals(dramaId)).orElseThrow();
+        var previousObjectKey = episode.videoObjectKey;
+        episode.videoObjectKey = null;
+        episode.videoUrl = null;
+        episodes.save(episode);
+        return previousObjectKey;
     }
 }

@@ -3,6 +3,7 @@ package br.com.brasildrama.catalog;
 import br.com.brasildrama.media.MediaStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,11 +16,13 @@ class AdminEpisodeApi {
     private final DramaRepository dramas;
     private final EpisodeRepository episodes;
     private final MediaStorageService media;
+    private final EpisodeDeletionService deletions;
 
-    AdminEpisodeApi(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media) {
+    AdminEpisodeApi(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media, EpisodeDeletionService deletions) {
         this.dramas = dramas;
         this.episodes = episodes;
         this.media = media;
+        this.deletions = deletions;
     }
 
     @GetMapping
@@ -38,7 +41,15 @@ class AdminEpisodeApi {
         var episode = new EpisodeEntity();
         episode.dramaId = dramaId;
         apply(episode, request);
-        episodes.saveAndFlush(episode);
+        try {
+            episodes.saveAndFlush(episode);
+        } catch (DataIntegrityViolationException violation) {
+            // O existsBy acima não fecha a corrida: duas abas do Studio recebem o
+            // mesmo "último número + 1" e a segunda só descobre o conflito na
+            // constraint. Sem este bloco o operador via 500 em vez do 409 que a tela
+            // já sabe explicar.
+            return conflict("EPISODE_NUMBER_ALREADY_EXISTS");
+        }
         return ResponseEntity.status(201).body(view(episode));
     }
 
@@ -52,13 +63,22 @@ class AdminEpisodeApi {
         if (episode.number != request.number() && episodes.existsByDramaIdAndNumber(dramaId, request.number())) return conflict("EPISODE_NUMBER_ALREADY_EXISTS");
 
         apply(episode, request);
-        episodes.saveAndFlush(episode);
+        try {
+            episodes.saveAndFlush(episode);
+        } catch (DataIntegrityViolationException violation) {
+            return conflict("EPISODE_NUMBER_ALREADY_EXISTS");
+        }
         return ResponseEntity.ok(view(episode));
     }
 
+    // Público de propósito. O Spring aplica @Transactional só a métodos públicos, e
+    // em método package-private a anotação é silenciosamente ignorada. Aqui isso não
+    // era cosmético: a renumeração grava os números negativos e depois os positivos
+    // em dois flushes, e sem transação uma falha entre eles deixava a série com
+    // episódios EP -1, EP -2 de forma permanente.
     @PostMapping("/reorder")
     @Transactional
-    ResponseEntity<?> reorder(@PathVariable UUID dramaId, @Valid @RequestBody ReorderRequest request) {
+    public ResponseEntity<?> reorder(@PathVariable UUID dramaId, @Valid @RequestBody ReorderRequest request) {
         var drama = dramas.findById(dramaId).orElse(null);
         if (drama == null) return ResponseEntity.notFound().build();
         if (drama.status == DramaStatus.ARCHIVED) return conflict("DRAMA_ARCHIVED");
@@ -79,14 +99,30 @@ class AdminEpisodeApi {
         return ResponseEntity.ok(ordered.stream().map(this::view).toList());
     }
 
+    /**
+     * A regra anterior bloqueava a exclusão em série publicada, sem olhar o episódio.
+     * Como toda série no ar está publicada, na prática nenhum episódio era excluível
+     * em lugar nenhum — inclusive os meio-criados, sem vídeo, que é justamente o que
+     * o operador precisa remover. Quem decide agora é o histórico do episódio, em
+     * {@link EpisodeDeletionService}: direito de acesso pago bloqueia, histórico de
+     * reprodução é limpo junto.
+     *
+     * <p>Série arquivada continua congelada: arquivar é retirar o acervo de operação,
+     * não prepará-lo para edição.
+     */
     @DeleteMapping("/{episodeId}")
     ResponseEntity<?> delete(@PathVariable UUID dramaId, @PathVariable UUID episodeId) {
         var drama = dramas.findById(dramaId).orElse(null);
         if (drama == null) return ResponseEntity.notFound().build();
-        if (drama.status == DramaStatus.PUBLISHED || drama.status == DramaStatus.ARCHIVED) return conflict("DRAMA_STATE_BLOCKS_EPISODE_DELETE");
-        var episode = episodes.findById(episodeId).filter(e -> e.dramaId.equals(dramaId)).orElse(null);
-        if (episode == null) return ResponseEntity.notFound().build();
-        episodes.delete(episode);
+        if (drama.status == DramaStatus.ARCHIVED) return conflict("DRAMA_ARCHIVED");
+
+        var outcome = deletions.delete(dramaId, episodeId);
+        if (outcome.isNotFound()) return ResponseEntity.notFound().build();
+        if (!outcome.isDeleted()) return conflict(outcome.blockedReason());
+
+        // Fora da transação de propósito: com o episódio já removido em definitivo,
+        // uma falha do S3 deixa objeto órfão barato em vez de reverter o delete.
+        media.deleteEpisodeVideos(dramaId, episodeId);
         return ResponseEntity.noContent().build();
     }
 
