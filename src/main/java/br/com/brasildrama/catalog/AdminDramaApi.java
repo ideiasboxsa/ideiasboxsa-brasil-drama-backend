@@ -16,11 +16,18 @@ class AdminDramaApi {
     private final DramaRepository dramas;
     private final EpisodeRepository episodes;
     private final MediaStorageService media;
+    private final DramaDeletionService deletion;
 
-    AdminDramaApi(DramaRepository dramas, EpisodeRepository episodes, MediaStorageService media) {
+    AdminDramaApi(
+        DramaRepository dramas,
+        EpisodeRepository episodes,
+        MediaStorageService media,
+        DramaDeletionService deletion
+    ) {
         this.dramas = dramas;
         this.episodes = episodes;
         this.media = media;
+        this.deletion = deletion;
     }
 
     @GetMapping
@@ -61,6 +68,25 @@ class AdminDramaApi {
         if (request.slug() != null && !request.slug().isBlank()) drama.slug = uniqueSlug(request.slug(), drama.id);
         dramas.saveAndFlush(drama);
         return ResponseEntity.ok(detail(drama));
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<?> delete(@PathVariable UUID id) {
+        var outcome = deletion.delete(id);
+        if (outcome.isNotFound()) return ResponseEntity.notFound().build();
+        if (!outcome.isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of(
+                "code", outcome.blockedReason() == null ? "DRAMA_DELETE_BLOCKED" : outcome.blockedReason(),
+                "recommendedAction", "ARCHIVE"
+            ));
+        }
+
+        // A mídia só é apagada depois que a transação de banco terminou. Se o S3
+        // falhar, sobra objeto órfão; nunca uma série viva apontando para mídia ausente.
+        media.deleteObject(outcome.posterObjectKey());
+        media.deleteObject(outcome.backdropObjectKey());
+        outcome.episodeIds().forEach(episodeId -> media.deleteEpisodeVideos(id, episodeId));
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/status")
